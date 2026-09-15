@@ -131,6 +131,10 @@ Actions → Variables):
 
 No secrets are needed: OIDC replaces stored AWS keys entirely.
 
+Until those variables exist the deploy job **skips itself** — there is no role
+to assume and no bucket to write to. Setting `AWS_DEPLOY_ROLE_ARN` and
+`APP_BUCKET_NAME` is what switches it on.
+
 ### 4. Upload content
 
 ```bash

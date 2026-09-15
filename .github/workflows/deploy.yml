@@ -28,6 +28,13 @@ jobs:
     name: Publish to S3 and CloudFront
     runs-on: ubuntu-latest
 
+    # Nothing to deploy to until `terraform apply` has been run from a laptop
+    # and the repository variables are set from its outputs. Skip in that state
+    # rather than fail: a red X on every push to master would be noise, not a
+    # signal. Set AWS_DEPLOY_ROLE_ARN and APP_BUCKET_NAME and this starts
+    # running on its own.
+    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.APP_BUCKET_NAME != ''
+
     # NOTE: adding `environment: <name>` here changes the OIDC token's `sub`
     # claim from `repo:OWNER/REPO:ref:refs/heads/master` to
     # `repo:OWNER/REPO:environment:<name>`, which the role's trust policy would
