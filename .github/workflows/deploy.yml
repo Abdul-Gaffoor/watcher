@@ -1,0 +1,98 @@
+name: Deploy
+
+# Publishes the built SPA and the catalog. Infrastructure changes (including
+# the auth Lambda's code, which Terraform owns) go through terraform.yml.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'content/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+# id-token is what lets the job request an OIDC token to trade for AWS
+# credentials. Without it the assume-role step fails.
+permissions:
+  contents: read
+  id-token: write
+
+# Never let two deploys race to the same bucket.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish to S3 and CloudFront
+    runs-on: ubuntu-latest
+    # Matches github_environments in terraform.tfvars. Add required reviewers on
+    # this environment in repo settings to gate production behind an approval.
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build the web app
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build
+
+      - name: Assume the deploy role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: watcher-deploy-${{ github.run_id }}
+
+      # Hashed filenames change on every build, so these can cache forever.
+      - name: Upload hashed assets
+        run: |
+          aws s3 sync web/dist "s3://${{ vars.APP_BUCKET_NAME }}" \
+            --delete \
+            --exclude 'index.html' \
+            --cache-control 'public, max-age=31536000, immutable'
+
+      # index.html names the hashed bundles, so it must always be revalidated —
+      # otherwise a deploy stays invisible until the edge TTL lapses.
+      - name: Upload the app shell
+        run: |
+          aws s3 cp web/dist/index.html "s3://${{ vars.APP_BUCKET_NAME }}/index.html" \
+            --cache-control 'no-cache, must-revalidate' \
+            --content-type 'text/html; charset=utf-8'
+
+      - name: Publish the catalog
+        run: |
+          aws s3 cp content/catalog.json \
+            "s3://${{ vars.MEDIA_BUCKET_NAME }}/media/catalog.json" \
+            --cache-control 'public, max-age=60' \
+            --content-type 'application/json; charset=utf-8'
+
+      # Artwork is immutable; a re-render gets a new path.
+      - name: Publish artwork
+        run: |
+          aws s3 sync content/media \
+            "s3://${{ vars.MEDIA_BUCKET_NAME }}/media" \
+            --cache-control 'public, max-age=31536000, immutable'
+
+      # Only the two mutable paths, which keeps deploys inside the free tier.
+      - name: Invalidate the shell and catalog
+        run: |
+          set -euo pipefail
+          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --paths '/index.html' '/' '/media/catalog.json' \
+            --query 'Invalidation.Id' --output text)
+          echo "Waiting for $INVALIDATION_ID…"
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --id "$INVALIDATION_ID"
+
+      - name: Summary
+        run: echo "Deployed to ${{ vars.APP_URL }}" >> "$GITHUB_STEP_SUMMARY"

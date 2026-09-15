@@ -94,56 +94,51 @@ npx playwright install chromium
 
 ## Deploy to AWS
 
-You need the AWS CLI configured, plus `openssl` and `zip`.
+Terraform is the supported path — see **[deploy-aws/README.md](deploy-aws/README.md)**
+for the full walkthrough. In short:
 
 ```bash
-# 1. Signing key pair for the media cookies
-./scripts/generate-signing-key.sh
-
-# 2. Create your viewers
-node scripts/hash-password.mjs            # prompts, prints a scrypt hash
-mkdir -p .secrets && cat > .secrets/users.json <<'JSON'
-[{ "username": "alex", "name": "Alex", "roles": ["viewer"], "passwordHash": "scrypt$..." }]
-JSON
-
-# 3. Stack, API, app, content
-./scripts/deploy-infra.sh                 # ~15 min the first time (CloudFront)
-./scripts/deploy-api.sh
-./scripts/deploy-web.sh
-./scripts/upload-content.sh
+cd deploy-aws
+cp terraform.tfvars.example terraform.tfvars   # add viewers + your GitHub repo
+node ../scripts/hash-password.mjs              # once per viewer
+terraform init && terraform apply              # ~15 min (CloudFront)
+terraform output                               # URL + the GitHub repo variables
 ```
 
-The last command prints your URL. Re-running any single script is safe.
+That creates everything: the GitHub OIDC provider and deploy role, both private
+buckets, the distribution, the signing key group, and the auth Lambda.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `STACK_NAME` | `watcher` | CloudFormation stack name |
-| `AWS_REGION` | `us-east-1` | Deployment region |
-| `PRICE_CLASS` | `PriceClass_100` | `PriceClass_All` for best global latency |
-| `SECRETS_DIR` | `.secrets` | Where keys and the user roster live |
+Then push to `main` — `.github/workflows/deploy.yml` assumes the OIDC role and
+publishes the app and catalog with no long-lived AWS keys anywhere.
+
+> `infra/cloudformation/watcher-stack.yaml` describes the same infrastructure
+> from an earlier pass. Keep one or the other, not both — see the note at the
+> top of `deploy-aws/README.md`.
 
 ### Day-to-day
 
 ```bash
-./scripts/upload-content.sh catalog   # publish catalog edits (fast)
-./scripts/deploy-web.sh               # ship a UI change
+./scripts/upload-content.sh catalog   # publish catalog edits without a full deploy
+./scripts/deploy-web.sh               # ship a UI change by hand
 ```
 
-To add or remove a viewer, edit `.secrets/users.json` and re-run
-`./scripts/deploy-infra.sh`.
+To add or remove a viewer, edit the `users` list in `terraform.tfvars` and run
+`terraform apply`.
 
 ---
 
 ## Layout
 
 ```
-web/         React + TypeScript SPA (Vite)
-backend/     Auth Lambda — zero dependencies, node:crypto only
-infra/       CloudFormation: buckets, distribution, key group, Lambda
-scripts/     Deploy, transcode and local-dev tooling
-content/     catalog.json + placeholder art (real video goes to S3)
-e2e/         Browser smoke test
-docs/        Architecture notes, security notes, roadmap
+web/          React + TypeScript SPA (Vite)
+backend/      Auth Lambda — zero dependencies, node:crypto only
+deploy-aws/   Terraform: OIDC, buckets, distribution, key group, Lambda
+infra/        CloudFormation equivalent (earlier pass — pick one)
+.github/      CI and OIDC-based deploy workflows
+scripts/      Deploy, transcode and local-dev tooling
+content/      catalog.json + placeholder art (real video goes to S3)
+e2e/          Browser smoke test
+docs/         Architecture notes, security notes, roadmap
 ```
 
 ## Security notes

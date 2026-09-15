@@ -1,0 +1,14 @@
+# Holds password hashes and any custom-domain details.
+*.tfvars
+!*.tfvars.example
+
+# State contains the signing private key and the session secret.
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.bak
+crash.log
+crash.*.log
+
+# Lambda zip built by the archive_file data source.
+.terraform-build/

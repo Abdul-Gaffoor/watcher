@@ -1,0 +1,46 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored — it
+# holds password hashes.
+
+project_name = "watcher"
+aws_region   = "us-east-1"
+
+# --- GitHub OIDC -------------------------------------------------------------
+github_owner = "AbdulGaffoorN"
+github_repo  = "watcher"
+
+# Branches allowed to assume the deploy role.
+github_branches = ["main"]
+
+# Preferred for production: a GitHub Environment can require manual approval
+# before the job — and therefore the role — is reachable at all.
+# github_environments = ["production"]
+
+# Set false if this AWS account already has a GitHub OIDC provider.
+create_oidc_provider = true
+
+# Turn on only once the subjects above are pinned to a protected branch or an
+# approved environment — this role is administrative.
+create_terraform_role = false
+
+# --- Viewers -----------------------------------------------------------------
+# Generate each hash with:  node scripts/hash-password.mjs
+users = [
+  {
+    username      = "alex"
+    name          = "Alex"
+    roles         = ["viewer"]
+    password_hash = "scrypt$16384$8$1$REPLACE_ME$REPLACE_ME"
+  },
+]
+
+# --- CloudFront --------------------------------------------------------------
+# PriceClass_All gives the lowest latency worldwide, at a higher cost.
+price_class = "PriceClass_100"
+
+# Optional custom domain. The certificate must be issued in us-east-1.
+# domain_name         = "watch.example.com"
+# acm_certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/..."
+
+# --- Lifetimes ---------------------------------------------------------------
+session_ttl_seconds = 43200 # 12h sign-in
+media_ttl_seconds   = 3600  # 1h signed cookies, renewed in the background
