@@ -108,8 +108,13 @@ terraform output                               # URL + the GitHub repo variables
 That creates everything: the GitHub OIDC provider and deploy role, both private
 buckets, the distribution, the signing key group, and the auth Lambda.
 
-Then push to `main` — `.github/workflows/deploy.yml` assumes the OIDC role and
-publishes the app and catalog with no long-lived AWS keys anywhere.
+Terraform runs from your machine. From then on, pushing to `main` is the app
+deploy: `.github/workflows/deploy.yml` installs dependencies, builds the SPA,
+assumes the OIDC role, syncs to S3 and invalidates CloudFront — with no
+long-lived AWS keys stored anywhere.
+
+Backend (`backend/`) changes are the exception: Terraform owns the Lambda
+package, so those ship with a local `terraform apply`.
 
 > `infra/cloudformation/watcher-stack.yaml` describes the same infrastructure
 > from an earlier pass. Keep one or the other, not both — see the note at the

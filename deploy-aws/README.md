@@ -22,21 +22,39 @@ CloudFront, the auth Lambda, and the signing key that gates `/media/*`.
 | **API** | Auth Lambda (arm64, nodejs22), Function URL, log group, IAM role |
 | **Secrets** | Generated session secret and signing key |
 
-### Two roles, on purpose
+### What the split of roles and buckets is actually for
 
-**`watcher-github-actions-deploy`** — what `deploy.yml` uses. It can write to
-the two buckets and invalidate this one distribution. Nothing else. This is the
-role that runs on every content change, so it is the one that should stay dull.
+**Two IAM roles get created**, and only one of them has anything to do with CI:
 
-**`watcher-github-actions-terraform`** — off by default
-(`create_terraform_role = false`). It manages the whole stack, IAM included, so
-it is administrative. Turn it on only once `github_environments` pins it to an
-environment with required reviewers.
+| Role | Purpose |
+| --- | --- |
+| `watcher-api` | The Lambda's **execution role**. Every Lambda needs one — it is what lets the function write its own logs. Not a CI role. |
+| `watcher-github-actions-deploy` | The **OIDC role** GitHub Actions assumes. Can write the two buckets and invalidate this one distribution. Nothing else. |
 
-Terraform owns the Lambda's code (zipped from `backend/src` by `archive_file`),
-so a backend change ships through `terraform.yml`, not `deploy.yml`. That keeps
-one owner for the function and avoids drift where a CI code-push gets reverted
-by the next apply.
+A third, `watcher-github-actions-terraform`, exists in the code but is **not
+created** — `create_terraform_role` defaults to `false`. It is only for running
+`terraform apply` from CI. Applying from a laptop, you never need it.
+
+**Two S3 buckets.** To be clear about what this is *not*: it is not the security
+boundary. The gate is the trusted key group on the `/media/*` cache behaviour,
+and that works the same whether the objects sit in one bucket or two. The split
+buys three operational things:
+
+1. **Blast radius.** Publishing the SPA runs `aws s3 sync --delete`. Sharing a
+   bucket with the video library means one bad prefix away from deleting it.
+2. **Versioning where it pays.** The app bucket is versioned so a bad frontend
+   deploy can be rolled back. Versioning a video library doubles its storage
+   bill for no benefit — re-encodes get new paths anyway.
+3. **Room to scope writers later.** An upload/transcode pipeline can be given
+   the media bucket without also handing it your app.
+
+Buckets themselves are free; you pay for storage and requests either way. If you
+would still rather have one, it is a small change — say so.
+
+**Terraform owns the Lambda's code** (zipped from `backend/src` by
+`archive_file`), so a backend change ships with your local `terraform apply`,
+not through GitHub Actions. That keeps one owner for the function instead of a
+CI push and the next apply fighting over it.
 
 ---
 
@@ -100,15 +118,8 @@ Actions → Variables):
 | `MEDIA_BUCKET_NAME` | `media_bucket_name` |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `distribution_id` |
 | `APP_URL` | `app_url` |
-| `AWS_TERRAFORM_ROLE_ARN` | `github_actions_terraform_role_arn` (only if enabled) |
 
-If you enable `terraform.yml`, also add a **secret** named `TF_VAR_USERS`
-holding the roster as JSON (note `password_hash`, snake_case, matching the
-variable):
-
-```json
-[{"username":"alex","name":"Alex","roles":["viewer"],"password_hash":"scrypt$..."}]
-```
+No secrets are needed: OIDC replaces stored AWS keys entirely.
 
 ### 5. Upload content
 
@@ -132,9 +143,17 @@ Drop the `sub` condition and **any GitHub repository in the world** can assume
 the role — this is the classic OIDC misconfiguration. Drop `aud` and a token
 minted for a different audience is accepted.
 
-Prefer `github_environments` over `github_branches` for production: a GitHub
-Environment can require a manual approval, so the role is unreachable until a
-human clicks. A branch condition only proves which branch the workflow ran on.
+**Adding an approval gate is a two-sided change.** A GitHub Environment can
+require a manual approval, which is stronger than a branch condition — but the
+moment a job declares `environment: production`, GitHub changes the token's
+`sub` from `repo:OWNER/REPO:ref:refs/heads/main` to
+`repo:OWNER/REPO:environment:production`. So you must do both:
+
+1. add `environment: production` to the job in `.github/workflows/deploy.yml`, and
+2. add `github_environments = ["production"]` to `terraform.tfvars` and apply.
+
+Do one without the other and the assume-role step fails with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`.
 
 Check what you actually allowed:
 

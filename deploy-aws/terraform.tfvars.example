@@ -8,18 +8,21 @@ aws_region   = "us-east-1"
 github_owner = "AbdulGaffoorN"
 github_repo  = "watcher"
 
-# Branches allowed to assume the deploy role.
+# Branches allowed to assume the deploy role. This is what deploy.yml uses.
 github_branches = ["main"]
 
-# Preferred for production: a GitHub Environment can require manual approval
-# before the job — and therefore the role — is reachable at all.
+# Approval gating is a TWO-SIDED change. Declaring `environment: production` in
+# the workflow switches the OIDC subject from `...:ref:refs/heads/main` to
+# `...:environment:production`, so uncommenting this WITHOUT also adding
+# `environment: production` to .github/workflows/deploy.yml (or vice versa)
+# breaks the assume-role step.
 # github_environments = ["production"]
 
 # Set false if this AWS account already has a GitHub OIDC provider.
 create_oidc_provider = true
 
-# Turn on only once the subjects above are pinned to a protected branch or an
-# approved environment — this role is administrative.
+# Only needed to run `terraform apply` from CI. Applying from your laptop, leave
+# this off — it is an administrative role.
 create_terraform_role = false
 
 # --- Viewers -----------------------------------------------------------------

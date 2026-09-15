@@ -26,9 +26,13 @@ jobs:
   deploy:
     name: Publish to S3 and CloudFront
     runs-on: ubuntu-latest
-    # Matches github_environments in terraform.tfvars. Add required reviewers on
-    # this environment in repo settings to gate production behind an approval.
-    environment: production
+
+    # NOTE: adding `environment: <name>` here changes the OIDC token's `sub`
+    # claim from `repo:OWNER/REPO:ref:refs/heads/main` to
+    # `repo:OWNER/REPO:environment:<name>`, which the role's trust policy would
+    # then reject. If you want an approval gate, add the environment here AND
+    # add its name to `github_environments` in terraform.tfvars — both, or the
+    # assume-role step fails.
 
     steps:
       - uses: actions/checkout@v4
