@@ -1,6 +1,15 @@
-# Holds password hashes and any custom-domain details.
+# Tfvars hold password hashes, so they are ignored by default.
 *.tfvars
 !*.tfvars.example
+
+# The CI inputs: no hashes, no keys. Named rather than *.auto.tfvars so only
+# the workflow's explicit -var-file loads it, never a local run.
+!ci.tfvars
+
+# Tracked so the workflow has a viewer roster without a secret. This file
+# carries scrypt password hashes, so the repository must stay private. To make
+# it public again, drop this line and move the roster into the TF_VAR_USERS
+# repository secret instead.
 !terraform.tfvars
 
 # State contains the signing private key and the session secret.

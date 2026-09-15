@@ -1,46 +1,92 @@
 name: Deploy
 
-# Publishes the built SPA and the catalog, and nothing else. Infrastructure —
-# including the auth Lambda's code, which Terraform owns — is applied by hand
-# from a laptop. No workflow in this repository runs Terraform.
+# One pipeline, in dependency order: Terraform builds or updates the stack,
+# then the app is published into the buckets it just created. The app job reads
+# the bucket names and the distribution id straight from Terraform's outputs,
+# so there is nothing to keep in sync by hand and no repository variables to
+# set.
 on:
   push:
     branches: [master]
-    paths:
-      - 'web/**'
-      - 'content/**'
-      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
-# id-token is what lets the job request an OIDC token to trade for AWS
-# credentials. Without it the assume-role step fails.
 permissions:
   contents: read
-  id-token: write
 
-# Never let two deploys race to the same bucket.
+# Two applies against one state file would fight over the lock, and two syncs
+# would race on the same bucket.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
+# Static credentials from repository secrets. Both jobs authenticate the same
+# way: Terraform's AWS provider and the AWS CLI read these variable names
+# directly, so no configure-aws-credentials step is needed.
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_KEY }}
+  AWS_REGION: us-east-1
+  AWS_DEFAULT_REGION: us-east-1
+
 jobs:
-  deploy:
-    name: Publish to S3 and CloudFront
+  terraform:
+    name: Apply infrastructure
     runs-on: ubuntu-latest
 
-    # Nothing to deploy to until `terraform apply` has been run from a laptop
-    # and the repository variables are set from its outputs. Skip in that state
-    # rather than fail: a red X on every push to master would be noise, not a
-    # signal. Set AWS_DEPLOY_ROLE_ARN and APP_BUCKET_NAME and this starts
-    # running on its own.
-    if: vars.AWS_DEPLOY_ROLE_ARN != '' && vars.APP_BUCKET_NAME != ''
+    # Everything the app job needs in order to publish, taken from the stack
+    # that was just applied.
+    outputs:
+      app_bucket: ${{ steps.output.outputs.app_bucket }}
+      media_bucket: ${{ steps.output.outputs.media_bucket }}
+      distribution_id: ${{ steps.output.outputs.distribution_id }}
+      app_url: ${{ steps.output.outputs.app_url }}
 
-    # NOTE: adding `environment: <name>` here changes the OIDC token's `sub`
-    # claim from `repo:OWNER/REPO:ref:refs/heads/master` to
-    # `repo:OWNER/REPO:environment:<name>`, which the role's trust policy would
-    # then reject. If you want an approval gate, add the environment here AND
-    # add its name to `github_environments` in terraform.tfvars — both, or the
-    # assume-role step fails.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.4
+          # The wrapper rewrites stdout, which would corrupt `output -raw`.
+          terraform_wrapper: false
+
+      - name: Check formatting
+        run: terraform fmt -check -recursive
+        working-directory: deploy-aws
+
+      - name: Init
+        run: terraform init -input=false
+        working-directory: deploy-aws
+
+      - name: Validate
+        run: terraform validate
+        working-directory: deploy-aws
+
+      # ci.tfvars carries everything that is not secret. The viewer roster is
+      # the one exception: Terraform parses a TF_VAR_ value for a complex type
+      # as HCL, so the secret holds a list of objects.
+      - name: Apply
+        run: terraform apply -auto-approve -input=false -var-file=ci.tfvars
+        working-directory: deploy-aws
+        env:
+          TF_VAR_users: ${{ secrets.TF_VAR_USERS }}
+
+      - name: Collect outputs
+        id: output
+        working-directory: deploy-aws
+        run: |
+          set -euo pipefail
+          {
+            echo "app_bucket=$(terraform output -raw app_bucket_name)"
+            echo "media_bucket=$(terraform output -raw media_bucket_name)"
+            echo "distribution_id=$(terraform output -raw distribution_id)"
+            echo "app_url=$(terraform output -raw app_url)"
+          } >> "$GITHUB_OUTPUT"
+
+  app:
+    name: Publish the app
+    runs-on: ubuntu-latest
+    needs: terraform
 
     steps:
       - uses: actions/checkout@v4
@@ -56,17 +102,10 @@ jobs:
           npm --prefix web ci
           npm --prefix web run build
 
-      - name: Assume the deploy role
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-          role-session-name: watcher-deploy-${{ github.run_id }}
-
       # Hashed filenames change on every build, so these can cache forever.
       - name: Upload hashed assets
         run: |
-          aws s3 sync web/dist "s3://${{ vars.APP_BUCKET_NAME }}" \
+          aws s3 sync web/dist "s3://${{ needs.terraform.outputs.app_bucket }}" \
             --delete \
             --exclude 'index.html' \
             --cache-control 'public, max-age=31536000, immutable'
@@ -75,14 +114,15 @@ jobs:
       # otherwise a deploy stays invisible until the edge TTL lapses.
       - name: Upload the app shell
         run: |
-          aws s3 cp web/dist/index.html "s3://${{ vars.APP_BUCKET_NAME }}/index.html" \
+          aws s3 cp web/dist/index.html \
+            "s3://${{ needs.terraform.outputs.app_bucket }}/index.html" \
             --cache-control 'no-cache, must-revalidate' \
             --content-type 'text/html; charset=utf-8'
 
       - name: Publish the catalog
         run: |
           aws s3 cp content/catalog.json \
-            "s3://${{ vars.MEDIA_BUCKET_NAME }}/media/catalog.json" \
+            "s3://${{ needs.terraform.outputs.media_bucket }}/media/catalog.json" \
             --cache-control 'public, max-age=60' \
             --content-type 'application/json; charset=utf-8'
 
@@ -90,7 +130,7 @@ jobs:
       - name: Publish artwork
         run: |
           aws s3 sync content/media \
-            "s3://${{ vars.MEDIA_BUCKET_NAME }}/media" \
+            "s3://${{ needs.terraform.outputs.media_bucket }}/media" \
             --cache-control 'public, max-age=31536000, immutable'
 
       # Only the two mutable paths, which keeps deploys inside the free tier.
@@ -98,13 +138,13 @@ jobs:
         run: |
           set -euo pipefail
           INVALIDATION_ID=$(aws cloudfront create-invalidation \
-            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --distribution-id "${{ needs.terraform.outputs.distribution_id }}" \
             --paths '/index.html' '/' '/media/catalog.json' \
             --query 'Invalidation.Id' --output text)
           echo "Waiting for $INVALIDATION_ID…"
           aws cloudfront wait invalidation-completed \
-            --distribution-id "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" \
+            --distribution-id "${{ needs.terraform.outputs.distribution_id }}" \
             --id "$INVALIDATION_ID"
 
       - name: Summary
-        run: echo "Deployed to ${{ vars.APP_URL }}" >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Deployed to ${{ needs.terraform.outputs.app_url }}" >> "$GITHUB_STEP_SUMMARY"

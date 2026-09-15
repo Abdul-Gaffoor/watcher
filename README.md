@@ -102,7 +102,7 @@ cd deploy-aws
 cp terraform.tfvars.example terraform.tfvars   # add viewers + your GitHub repo
 node ../scripts/hash-password.mjs              # once per viewer
 terraform init && terraform apply              # ~15 min (CloudFront)
-terraform output                               # URL + the GitHub repo variables
+terraform output                               # the app URL and bucket names
 ```
 
 That creates everything: the GitHub OIDC provider and deploy role, both private
@@ -119,14 +119,17 @@ One consequence worth knowing: the signed-cookie policy names that host exactly,
 so **video plays on the custom domain only**. The `*.cloudfront.net` address
 still loads the app and signs you in, but its segment requests return 403.
 
-Terraform runs from your machine, and only from your machine — no workflow in
-this repository runs it. From then on, pushing to `master` is the app
-deploy: `.github/workflows/deploy.yml` installs dependencies, builds the SPA,
-assumes the OIDC role, syncs to S3 and invalidates CloudFront — with no
-long-lived AWS keys stored anywhere.
+Pushing to `master` does the whole thing. `.github/workflows/deploy.yml` applies
+Terraform first, then publishes the app into the buckets that apply produced,
+reading the bucket names and the distribution id from Terraform's outputs rather
+than from anything wired up by hand. Backend changes ride along, because
+Terraform owns the Lambda package.
 
-Backend (`backend/`) changes are the exception: Terraform owns the Lambda
-package, so those ship with a local `terraform apply`.
+State is shared, in `s3://terraform-state-132848804230`, so applying from your
+laptop and applying from a push are the same operation on the same resources.
+Actions authenticates with an access key pair in the `AWS_ACCESS_KEY` and
+`AWS_SECRET_KEY` repository secrets, and reads the viewer roster from a third
+secret, `TF_VAR_USERS`.
 
 ### Day-to-day
 

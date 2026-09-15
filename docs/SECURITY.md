@@ -56,20 +56,31 @@ What the MVP does, and what to change before it takes real public traffic.
 7. **No CSP.** Add a `Content-Security-Policy` to the response headers policy
    once the asset origins are settled (`script-src 'self'`, `media-src 'self'`).
 
-8. **Buckets carry `prevent_destroy`.** `terraform destroy` refuses to take
+8. **GitHub Actions holds long-lived AWS keys.** `AWS_ACCESS_KEY` and
+   `AWS_SECRET_KEY` are static credentials in repository secrets. They do not
+   expire on their own, they are as powerful as the IAM user behind them, and
+   anyone who can push a workflow change to `master` can use them. The stack
+   still creates the GitHub OIDC provider and a narrow deploy role, which issue
+   short-lived credentials and need nothing stored. Switching back is a change
+   to `deploy.yml` alone. Until then: give that IAM user only the permissions
+   the apply needs, and rotate the key pair on a schedule.
+
+9. **Buckets carry `prevent_destroy`.** `terraform destroy` refuses to take
    them — deliberate, so a mistake cannot delete your content library, but it
    does mean removing the lifecycle block if you genuinely want them gone.
 
 ## Handling the signing key
 
-Terraform generates the RSA signing key and holds it in `terraform.tfstate`,
-in plaintext. Anyone holding that key can mint media access, so the state file
-is a secret: keep it backed up, keep it off shared drives, and never commit it
-(`.gitignore` covers `*.tfstate*`). To bring your own key instead, set
-`signing_private_key_pem`.
+Terraform generates the RSA signing key and holds it in the state file, in
+plaintext. Anyone who can read that object can mint media access, so the state
+is a secret in its own right. It now lives in
+`s3://terraform-state-132848804230/watcher/terraform.tfstate`, written with
+`encrypt = true`. That bucket must have all four public-access blocks on, and
+should have versioning enabled so a truncated write is recoverable. Read access
+to it is equivalent to read access to the signing key, so scope it as tightly
+as the buckets themselves.
 
-Once more than one person or machine needs to apply, move state to an
-encrypted, versioned S3 bucket via a `backend "s3"` block in `versions.tf`.
+To bring your own key instead, set `signing_private_key_pem`.
 
 To rotate:
 

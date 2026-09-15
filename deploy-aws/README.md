@@ -84,12 +84,11 @@ terraform plan
 terraform apply
 ```
 
-No workflow in this repository runs Terraform — not `apply`, not `plan`, not
-`validate`. The stack is applied by hand from a laptop, so that `validate` line
-is the only thing that catches a broken `.tf` before `plan` does. GitHub Actions
-builds and publishes the app, and the only role it can assume writes objects to
-the two buckets and invalidates this one distribution. It cannot create,
-change or delete infrastructure.
+GitHub Actions applies the same stack from the same state, so a laptop apply
+and a pushed apply are interchangeable. `.github/workflows/deploy.yml` runs
+`fmt -check`, `init`, `validate` and `apply` against `ci.tfvars`, then publishes
+the app into the buckets that apply produced. Running `plan` locally before
+pushing is still the cheapest way to see what a push will do.
 
 CloudFront takes 10–15 minutes to reach `Deployed` on first creation, and the
 certificate has to be issued before the distribution is even created, so the
@@ -113,27 +112,31 @@ terraform providers lock \
 
 ### 3. Wire up GitHub
 
-```bash
-terraform output
+Three repository **secrets**, under Settings, then Secrets and variables, then
+Actions:
+
+| Secret | What it holds |
+| --- | --- |
+| `AWS_ACCESS_KEY` | Access key id for the IAM user Actions applies as |
+| `AWS_SECRET_KEY` | Its secret access key |
+| `TF_VAR_USERS` | The viewer roster, as HCL |
+
+No repository **variables** are needed. Everything the app job used to read
+from them now comes from the Terraform outputs of the apply that ran seconds
+earlier, in the same workflow.
+
+`TF_VAR_USERS` is the one secret input to Terraform. Everything else lives in
+`ci.tfvars`, which is committed because none of it is sensitive. Terraform reads
+a `TF_VAR_` value for a complex type as HCL, so the secret is a list of objects
+on one line:
+
+```hcl
+[{ username = "alex", name = "Alex", roles = ["viewer"], password_hash = "scrypt$16384$8$1$...$..." }]
 ```
 
-Set these as **repository variables** (Settings → Secrets and variables →
-Actions → Variables):
-
-| Variable | From output |
-| --- | --- |
-| `AWS_REGION` | your `aws_region` |
-| `AWS_DEPLOY_ROLE_ARN` | `github_actions_deploy_role_arn` |
-| `APP_BUCKET_NAME` | `app_bucket_name` |
-| `MEDIA_BUCKET_NAME` | `media_bucket_name` |
-| `CLOUDFRONT_DISTRIBUTION_ID` | `distribution_id` |
-| `APP_URL` | `app_url` |
-
-No secrets are needed: OIDC replaces stored AWS keys entirely.
-
-Until those variables exist the deploy job **skips itself** — there is no role
-to assume and no bucket to write to. Setting `AWS_DEPLOY_ROLE_ARN` and
-`APP_BUCKET_NAME` is what switches it on.
+`name` and `roles` are optional and default to the username and `["viewer"]`.
+Generate each hash with `node scripts/hash-password.mjs`. Adding a viewer is an
+edit to that secret and a re-run of the workflow.
 
 ### 4. Upload content
 
@@ -221,19 +224,35 @@ would have refreshed anyway.
 
 ---
 
-## State lives on your laptop
+## State lives in S3
 
-`terraform.tfstate` sits next to these files, gitignored. It contains the
-CloudFront **signing private key** and the **session secret** in plaintext —
-anyone holding that key can mint media access — so:
+`versions.tf` points at `s3://terraform-state-132848804230/watcher/terraform.tfstate`.
+Shared state is what lets a laptop and a workflow apply the same stack instead
+of each building its own copy of everything.
 
-- Back it up somewhere private. Losing it means losing the ability to manage or
-  cleanly destroy the stack.
-- Never commit it. `.gitignore` covers `*.tfstate*`, but check before you
-  `git add -A` in this directory.
+Locking is S3-native, via `use_lockfile`. A concurrent apply takes a `.tflock`
+object beside the state and the second one waits. This replaces the DynamoDB
+table older setups needed, and is why `required_version` is at least 1.10.
 
-If a second machine or another person ever needs to apply, that is the point to
-add a `backend "s3"` block to `versions.tf` and migrate — not before.
+The state contains the CloudFront **signing private key** and the **session
+secret** in plaintext. Anyone who can read that object can mint media access,
+so the bucket must block public access, and versioning on it is what saves you
+from a corrupted or truncated write.
+
+### Moving an existing local state into S3
+
+If you already applied from a laptop, that state is the real record of what
+exists. Adding the backend block does not move it. Run this once, in
+`deploy-aws`, from the machine that holds it:
+
+```bash
+terraform init -migrate-state
+```
+
+Terraform sees the local file and the new backend, and offers to copy one into
+the other. Answer yes. Skipping this means the workflow starts from empty
+state, tries to create resources that already exist, and fails on names that
+are already taken.
 
 ## Notes and gotchas
 
@@ -252,8 +271,13 @@ add a `backend "s3"` block to `versions.tf` and migrate — not before.
 - **The hosted zone must be authoritative for the domain.** A second
   `precondition` compares `domain_name` against the zone's own name, so a
   mismatched zone id fails at plan rather than hanging on validation.
-- **CI never touches this directory.** `.github/workflows/ci.yml` tests and
-  builds the app; `deploy.yml` publishes it. Neither installs Terraform.
+- **Two workflows, different jobs.** `ci.yml` tests and builds the app on every
+  push and pull request. `deploy.yml` applies this directory and then publishes
+  the app, on pushes to `master` and on manual dispatch.
+- **The OIDC role is currently unused.** Actions authenticates with the static
+  keys in `AWS_ACCESS_KEY` and `AWS_SECRET_KEY`, so `watcher-github-actions-deploy`
+  and the OIDC provider are still created but nothing assumes them. They are
+  left in place because switching back to OIDC is then a workflow-only change.
 - **The Lambda Function URL is `AuthType: NONE`** and reachable directly. The
   handler authenticates every request, but see `../docs/SECURITY.md` for how to
   put it behind CloudFront only.
