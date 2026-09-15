@@ -7,6 +7,9 @@ set -euo pipefail
 
 REGION="${AWS_REGION:-us-east-1}"
 
+# Credentials come from the usual CLI chain, so pick a named profile with:
+#   AWS_PROFILE=abdul.cloud0two ./scripts/deploy-web.sh
+
 APP_BUCKET="$(./scripts/stack-output.sh app_bucket_name)"
 DISTRIBUTION_ID="$(./scripts/stack-output.sh distribution_id)"
 
@@ -34,4 +37,4 @@ aws cloudfront create-invalidation \
   --paths '/index.html' '/' \
   --output text --query 'Invalidation.Id'
 
-echo "Web deployed: https://$(./scripts/stack-output.sh distribution_domain_name)"
+echo "Web deployed: $(./scripts/stack-output.sh app_url)"

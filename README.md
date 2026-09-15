@@ -108,6 +108,17 @@ terraform output                               # URL + the GitHub repo variables
 That creates everything: the GitHub OIDC provider and deploy role, both private
 buckets, the distribution, the signing key group, and the auth Lambda.
 
+**The domain.** The stack is configured for
+**https://watcher.moderndayjourney.me**. Terraform requests the ACM certificate
+in us-east-1, writes its validation record into the hosted zone, waits for
+issuance, and points A and AAAA aliases at the distribution — DNS is not a
+manual step. Credentials come from the `abdul.cloud0two` profile, set as
+`aws_profile` in `terraform.tfvars`.
+
+One consequence worth knowing: the signed-cookie policy names that host exactly,
+so **video plays on the custom domain only**. The `*.cloudfront.net` address
+still loads the app and signs you in, but its segment requests return 403.
+
 Terraform runs from your machine. From then on, pushing to `master` is the app
 deploy: `.github/workflows/deploy.yml` installs dependencies, builds the SPA,
 assumes the OIDC role, syncs to S3 and invalidates CloudFront — with no

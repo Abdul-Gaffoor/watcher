@@ -17,6 +17,16 @@ variable "aws_region" {
   description = "Region for the buckets and the auth Lambda. CloudFront itself is global."
 }
 
+variable "aws_profile" {
+  type        = string
+  default     = null
+  description = <<-DESC
+    Named profile from ~/.aws/credentials or ~/.aws/config to apply with. Leave
+    null in CI, where the GitHub OIDC role supplies credentials through the
+    environment instead.
+  DESC
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}
@@ -148,13 +158,48 @@ variable "price_class" {
 variable "domain_name" {
   type        = string
   default     = null
-  description = "Optional custom domain (e.g. watch.example.com). Requires acm_certificate_arn."
+  description = <<-DESC
+    Custom domain the platform is served on (e.g. watcher.example.com). Needs a
+    certificate: either set route53_zone_id and let Terraform request and
+    validate one, or supply acm_certificate_arn yourself.
+
+    Setting this also pins the signed-cookie policy to this exact host, so media
+    is only playable through this domain — see locals.tf.
+  DESC
+
+  validation {
+    condition     = var.domain_name == null || can(regex("^[a-z0-9][a-z0-9.-]*[a-z0-9]$", var.domain_name))
+    error_message = "domain_name must be a bare lowercase hostname, with no scheme and no trailing dot."
+  }
+}
+
+variable "route53_zone_id" {
+  type        = string
+  default     = null
+  description = <<-DESC
+    Hosted zone that is authoritative for domain_name. When set, Terraform
+    requests an ACM certificate, writes its DNS validation records, and points
+    A and AAAA alias records at the distribution.
+
+    Leave null to manage DNS elsewhere; then supply acm_certificate_arn and
+    create the alias (or CNAME) record yourself.
+  DESC
+
+  validation {
+    condition     = var.route53_zone_id == null || can(regex("^Z[A-Z0-9]+$", var.route53_zone_id))
+    error_message = "route53_zone_id must be a hosted zone id, e.g. Z0123456789ABCDEFGHIJ."
+  }
 }
 
 variable "acm_certificate_arn" {
   type        = string
   default     = null
-  description = "ACM certificate ARN for domain_name. Must be issued in us-east-1 for CloudFront."
+  description = <<-DESC
+    Existing certificate for domain_name, when DNS lives outside this account
+    and Terraform cannot validate one itself. Must be issued in us-east-1 —
+    CloudFront accepts certificates from nowhere else. Takes precedence over
+    route53_zone_id.
+  DESC
 
   validation {
     condition     = var.acm_certificate_arn == null || can(regex("^arn:aws[a-z-]*:acm:us-east-1:", var.acm_certificate_arn))

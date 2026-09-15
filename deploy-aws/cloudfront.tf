@@ -94,8 +94,8 @@ resource "aws_cloudfront_distribution" "this" {
 
   lifecycle {
     precondition {
-      condition     = var.domain_name == null || var.acm_certificate_arn != null
-      error_message = "acm_certificate_arn is required when domain_name is set (issued in us-east-1)."
+      condition     = var.domain_name == null || local.certificate_arn != null
+      error_message = "domain_name needs a certificate: set route53_zone_id to have Terraform issue one, or pass acm_certificate_arn (us-east-1)."
     }
   }
 
@@ -174,7 +174,7 @@ resource "aws_cloudfront_distribution" "this" {
 
   viewer_certificate {
     cloudfront_default_certificate = var.domain_name == null
-    acm_certificate_arn            = var.acm_certificate_arn
+    acm_certificate_arn            = local.certificate_arn
     ssl_support_method             = var.domain_name == null ? null : "sni-only"
     minimum_protocol_version       = var.domain_name == null ? "TLSv1" : "TLSv1.2_2021"
   }

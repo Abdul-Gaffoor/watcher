@@ -12,9 +12,10 @@ equivalent to keep in sync.
 
 | Area | Resources |
 | --- | --- |
-| **GitHub OIDC** | OIDC provider, deploy role (narrow), optional Terraform role |
+| **GitHub OIDC** | OIDC provider, deploy role (narrow) |
 | **Storage** | App bucket + media bucket — private, encrypted, OAC-only |
 | **CDN** | Distribution, OAC, SPA-router function, response headers policy |
+| **Domain** | ACM certificate (us-east-1), its validation record, A + AAAA aliases |
 | **Access** | RSA signing key pair, CloudFront public key, trusted key group |
 | **API** | Auth Lambda (arm64, nodejs22), Function URL, log group, IAM role |
 | **Secrets** | Generated session secret and signing key |
@@ -63,6 +64,17 @@ node ../scripts/hash-password.mjs      # once per viewer; paste the hash in
 Fill in `github_owner` and `github_repo` at minimum. `terraform.tfvars` is
 gitignored — it holds password hashes.
 
+The example is already pointed at this project: the `watcher.moderndayjourney.me`
+domain, its hosted zone, and the `abdul.cloud0two` profile. `aws_profile` is
+what makes `terraform apply` pick up the right credentials from
+`~/.aws/config`; clear it to fall back to environment variables or SSO.
+
+Check that the profile resolves before applying:
+
+```bash
+aws sts get-caller-identity --profile abdul.cloud0two
+```
+
 ### 2. Apply
 
 ```bash
@@ -71,7 +83,16 @@ terraform plan
 terraform apply
 ```
 
-CloudFront takes 10–15 minutes to reach `Deployed` on first creation.
+CloudFront takes 10–15 minutes to reach `Deployed` on first creation, and the
+certificate has to be issued before the distribution is even created, so the
+first apply is mostly waiting. The order is forced by the dependencies:
+
+```
+certificate requested -> validation record written -> ACM issues (a minute or two)
+  -> distribution created (10-15 min) -> A/AAAA aliases point at it
+```
+
+DNS then needs to propagate, which the 60-second record TTL keeps short.
 
 `terraform init` writes `.terraform.lock.hcl` — **commit it**. It is not in the
 repo yet because a lock file is platform-specific, and the one generated here
@@ -106,7 +127,7 @@ No secrets are needed: OIDC replaces stored AWS keys entirely.
 
 ```bash
 cd ..
-./scripts/upload-content.sh      # or just push to main and let deploy.yml run
+./scripts/upload-content.sh      # or push to master and let deploy.yml run
 ```
 
 ---
@@ -147,19 +168,31 @@ terraform output github_allowed_subjects
 ## The media policy resource
 
 `terraform output media_policy_resource` shows what the signed-cookie policy is
-scoped to. Without a custom domain it is `https://*/media/*`, because the
-distribution's generated hostname cannot be fed back into the Lambda's
+scoped to. With `domain_name` set it is the exact host:
+
+```
+https://watcher.moderndayjourney.me/media/*
+```
+
+**So media plays on the custom domain and nowhere else.** The
+`*.cloudfront.net` address still serves the app and still signs you in, but
+every segment request comes back 403, because the cookie's policy names a
+different host. That is the intended trade for one canonical address. If you
+need both to work, either drop `domain_name` or widen the policy by hand.
+
+Without a custom domain the resource falls back to `https://*/media/*`, because
+the distribution's generated hostname cannot be fed back into the Lambda's
 environment without a dependency cycle:
 
 ```
 lambda (env needs domain) -> distribution (needs function URL) -> function URL (needs lambda)
 ```
 
-The wildcard is on the **host**, never the path. It costs nothing in practice:
-the signature is verified against our public key, that key lives only in our key
-group, and that key group is attached only to this distribution — so a cookie we
-signed is useless anywhere else. Set `domain_name` and the policy names one host
-again. See `locals.tf` for the full reasoning.
+That wildcard is on the **host**, never the path, and it costs nothing in
+practice: the signature is verified against our public key, that key lives only
+in our key group, and that key group is attached only to this distribution — so
+a cookie we signed is useless anywhere else. See `locals.tf` for the full
+reasoning.
 
 ---
 
@@ -192,15 +225,21 @@ add a `backend "s3"` block to `versions.tf` and migrate — not before.
 
 ## Notes and gotchas
 
-- **`prevent_destroy` is set on both buckets** and on the state bucket. That is
-  deliberate: `terraform destroy` should not be able to take the content library
-  with it. Remove the lifecycle block if you genuinely want them gone.
+- **`prevent_destroy` is set on both buckets.** That is deliberate:
+  `terraform destroy` should not be able to take the content library with it.
+  Remove the lifecycle block if you genuinely want them gone.
 - **The OIDC provider is a singleton per account.** If another stack already
   created `token.actions.githubusercontent.com`, set
   `create_oidc_provider = false` and this configuration looks it up instead.
 - **A custom domain needs a us-east-1 certificate.** CloudFront accepts ACM
-  certificates only from that region, whatever `aws_region` is set to. There is
-  a `precondition` that catches a missing certificate at plan time.
+  certificates only from that region, whatever `aws_region` is set to, which is
+  why `providers.tf` carries an `aws.us_east_1` alias used for the certificate
+  alone. Terraform requests and validates it when `route53_zone_id` is set; pass
+  `acm_certificate_arn` instead when DNS lives elsewhere. A `precondition`
+  catches a domain with neither at plan time.
+- **The hosted zone must be authoritative for the domain.** A second
+  `precondition` compares `domain_name` against the zone's own name, so a
+  mismatched zone id fails at plan rather than hanging on validation.
 - **The Lambda Function URL is `AuthType: NONE`** and reachable directly. The
   handler authenticates every request, but see `../docs/SECURITY.md` for how to
   put it behind CloudFront only.

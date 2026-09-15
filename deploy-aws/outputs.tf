@@ -47,3 +47,8 @@ output "media_policy_resource" {
   description = "Resource string the signed-cookie policy is scoped to."
   value       = local.media_resource
 }
+
+output "certificate_arn" {
+  description = "Certificate serving the custom domain. Null when the distribution uses its default *.cloudfront.net certificate."
+  value       = local.certificate_arn
+}

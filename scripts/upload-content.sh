@@ -12,6 +12,9 @@ set -euo pipefail
 REGION="${AWS_REGION:-us-east-1}"
 MODE="${1:-all}"
 
+# Credentials come from the usual CLI chain, so pick a named profile with:
+#   AWS_PROFILE=abdul.cloud0two ./scripts/upload-content.sh
+
 MEDIA_BUCKET="$(./scripts/stack-output.sh media_bucket_name)"
 DISTRIBUTION_ID="$(./scripts/stack-output.sh distribution_id)"
 

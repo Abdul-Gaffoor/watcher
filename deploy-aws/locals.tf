@@ -9,6 +9,19 @@ locals {
 
   aliases = var.domain_name == null ? [] : [var.domain_name]
 
+  # Terraform requests and validates the certificate itself only when it also
+  # controls DNS; an explicitly supplied ARN always wins.
+  create_certificate = var.domain_name != null && var.acm_certificate_arn == null && var.route53_zone_id != null
+
+  # Whether the hosted zone is ours to write to (validation + alias records).
+  manage_dns = var.domain_name != null && var.route53_zone_id != null
+
+  certificate_arn = (
+    var.acm_certificate_arn != null
+    ? var.acm_certificate_arn
+    : (local.create_certificate ? aws_acm_certificate_validation.this[0].certificate_arn : null)
+  )
+
   # The `sub` claim patterns a GitHub Actions token must match to assume a role.
   github_subjects = concat(
     [for branch in var.github_branches : "repo:${var.github_owner}/${var.github_repo}:ref:refs/heads/${branch}"],
@@ -35,6 +48,12 @@ locals {
    *
    * If you later attach this key group to a second distribution, set
    * domain_name so the policy names one host again.
+   *
+   * The flip side of setting domain_name: the policy then names that host and
+   * nothing else, so media loads only over the custom domain. Opening the
+   * *.cloudfront.net address still serves the app shell and signs you in, but
+   * every segment comes back 403. That is the intended trade — one canonical
+   * address — and it is why app_url points at the domain.
    */
   media_resource = var.domain_name == null ? "https://*/media/*" : "https://${var.domain_name}/media/*"
 
