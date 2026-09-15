@@ -79,9 +79,17 @@ aws sts get-caller-identity --profile abdul.cloud0two
 
 ```bash
 terraform init
+terraform fmt -check -recursive && terraform validate
 terraform plan
 terraform apply
 ```
+
+No workflow in this repository runs Terraform — not `apply`, not `plan`, not
+`validate`. The stack is applied by hand from a laptop, so that `validate` line
+is the only thing that catches a broken `.tf` before `plan` does. GitHub Actions
+builds and publishes the app, and the only role it can assume writes objects to
+the two buckets and invalidates this one distribution. It cannot create,
+change or delete infrastructure.
 
 CloudFront takes 10–15 minutes to reach `Deployed` on first creation, and the
 certificate has to be issued before the distribution is even created, so the
@@ -240,6 +248,8 @@ add a `backend "s3"` block to `versions.tf` and migrate — not before.
 - **The hosted zone must be authoritative for the domain.** A second
   `precondition` compares `domain_name` against the zone's own name, so a
   mismatched zone id fails at plan rather than hanging on validation.
+- **CI never touches this directory.** `.github/workflows/ci.yml` tests and
+  builds the app; `deploy.yml` publishes it. Neither installs Terraform.
 - **The Lambda Function URL is `AuthType: NONE`** and reachable directly. The
   handler authenticates every request, but see `../docs/SECURITY.md` for how to
   put it behind CloudFront only.

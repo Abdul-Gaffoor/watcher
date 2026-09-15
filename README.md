@@ -119,7 +119,8 @@ One consequence worth knowing: the signed-cookie policy names that host exactly,
 so **video plays on the custom domain only**. The `*.cloudfront.net` address
 still loads the app and signs you in, but its segment requests return 403.
 
-Terraform runs from your machine. From then on, pushing to `master` is the app
+Terraform runs from your machine, and only from your machine — no workflow in
+this repository runs it. From then on, pushing to `master` is the app
 deploy: `.github/workflows/deploy.yml` installs dependencies, builds the SPA,
 assumes the OIDC role, syncs to S3 and invalidates CloudFront — with no
 long-lived AWS keys stored anywhere.

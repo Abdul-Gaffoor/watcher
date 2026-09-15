@@ -1,7 +1,8 @@
 name: Deploy
 
-# Publishes the built SPA and the catalog. Infrastructure changes (including
-# the auth Lambda's code, which Terraform owns) go through terraform.yml.
+# Publishes the built SPA and the catalog, and nothing else. Infrastructure —
+# including the auth Lambda's code, which Terraform owns — is applied by hand
+# from a laptop. No workflow in this repository runs Terraform.
 on:
   push:
     branches: [master]

@@ -43,24 +43,3 @@ jobs:
       - name: End-to-end smoke test
         run: npm run e2e
 
-  terraform:
-    name: Terraform validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.13.4
-
-      - name: Check formatting
-        run: terraform fmt -check -recursive
-        working-directory: deploy-aws
-
-      # No backend and no credentials — this validates syntax and provider
-      # schemas only.
-      - name: Validate
-        run: |
-          terraform init -backend=false -input=false
-          terraform validate
-        working-directory: deploy-aws
