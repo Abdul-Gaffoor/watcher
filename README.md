@@ -128,8 +128,9 @@ Terraform owns the Lambda package.
 State is shared, in `s3://terraform-state-132848804230`, so applying from your
 laptop and applying from a push are the same operation on the same resources.
 Actions authenticates with an access key pair in the `AWS_ACCESS_KEY` and
-`AWS_SECRET_KEY` repository secrets, and reads the viewer roster from a third
-secret, `TF_VAR_USERS`.
+`AWS_SECRET_KEY` repository secrets. The viewer roster comes from the tracked
+`deploy-aws/terraform.tfvars`, which holds password hashes and is why this
+repository is private.
 
 ### Day-to-day
 

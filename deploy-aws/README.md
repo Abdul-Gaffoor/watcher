@@ -112,31 +112,45 @@ terraform providers lock \
 
 ### 3. Wire up GitHub
 
-Three repository **secrets**, under Settings, then Secrets and variables, then
+Two repository **secrets**, under Settings, then Secrets and variables, then
 Actions:
 
 | Secret | What it holds |
 | --- | --- |
 | `AWS_ACCESS_KEY` | Access key id for the IAM user Actions applies as |
 | `AWS_SECRET_KEY` | Its secret access key |
-| `TF_VAR_USERS` | The viewer roster, as HCL |
 
 No repository **variables** are needed. Everything the app job used to read
 from them now comes from the Terraform outputs of the apply that ran seconds
 earlier, in the same workflow.
 
-`TF_VAR_USERS` is the one secret input to Terraform. Everything else lives in
-`ci.tfvars`, which is committed because none of it is sensitive. Terraform reads
-a `TF_VAR_` value for a complex type as HCL, so the secret is a list of objects
-on one line:
+### Where the inputs come from
+
+Three files feed the apply, and Terraform layers them in this order, each
+overriding the last:
+
+| Source | Carries | Loaded |
+| --- | --- | --- |
+| `terraform.tfvars` | The viewer roster, and your local `aws_profile` | Automatically, always |
+| `ci.tfvars` | The same settings with `aws_profile = null` | Only by the workflow's `-var-file` |
+| `TF_VAR_users` | An alternative roster | Only if `terraform.tfvars` does not set `users` |
+
+`terraform.tfvars` is tracked, which is why the workflow needs no roster secret
+and why **this repository must stay private**: the file holds scrypt password
+hashes. A runner has no `~/.aws/config`, so `ci.tfvars` overrides `aws_profile`
+to null and credentials come from the environment instead.
+
+To make the repository public again, remove `!terraform.tfvars` from
+`.gitignore` and put the roster in a `TF_VAR_USERS` secret. Terraform parses a
+`TF_VAR_` value for a complex type as HCL, so it is a list of objects on one
+line:
 
 ```hcl
 [{ username = "alex", name = "Alex", roles = ["viewer"], password_hash = "scrypt$16384$8$1$...$..." }]
 ```
 
-`name` and `roles` are optional and default to the username and `["viewer"]`.
-Generate each hash with `node scripts/hash-password.mjs`. Adding a viewer is an
-edit to that secret and a re-run of the workflow.
+`name` and `roles` are optional, defaulting to the username and `["viewer"]`.
+Generate each hash with `node scripts/hash-password.mjs`.
 
 ### 4. Upload content
 
