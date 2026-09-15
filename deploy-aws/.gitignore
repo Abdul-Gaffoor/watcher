@@ -1,6 +1,7 @@
 # Holds password hashes and any custom-domain details.
 *.tfvars
 !*.tfvars.example
+!terraform.tfvars
 
 # State contains the signing private key and the session secret.
 *.tfstate
