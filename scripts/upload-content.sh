@@ -9,12 +9,11 @@
 # short TTL plus an invalidation.
 set -euo pipefail
 
-STACK_NAME="${STACK_NAME:-watcher}"
 REGION="${AWS_REGION:-us-east-1}"
 MODE="${1:-all}"
 
-MEDIA_BUCKET="$(./scripts/stack-output.sh MediaBucketName)"
-DISTRIBUTION_ID="$(./scripts/stack-output.sh DistributionId)"
+MEDIA_BUCKET="$(./scripts/stack-output.sh media_bucket_name)"
+DISTRIBUTION_ID="$(./scripts/stack-output.sh distribution_id)"
 
 upload_catalog() {
   echo "Uploading catalog…"

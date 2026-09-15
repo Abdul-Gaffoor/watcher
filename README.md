@@ -5,7 +5,7 @@ Elliott Waves, Smart Money Concepts), cinema and documentaries — served as a
 static SPA from S3 through CloudFront, with sign-in required to watch anything.
 
 This is the **MVP**: it runs locally end to end and deploys to AWS from one
-CloudFormation stack. See [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
+Terraform stack. See [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
 
 ---
 
@@ -116,16 +116,15 @@ long-lived AWS keys stored anywhere.
 Backend (`backend/`) changes are the exception: Terraform owns the Lambda
 package, so those ship with a local `terraform apply`.
 
-> `infra/cloudformation/watcher-stack.yaml` describes the same infrastructure
-> from an earlier pass. Keep one or the other, not both — see the note at the
-> top of `deploy-aws/README.md`.
-
 ### Day-to-day
 
 ```bash
 ./scripts/upload-content.sh catalog   # publish catalog edits without a full deploy
 ./scripts/deploy-web.sh               # ship a UI change by hand
 ```
+
+Both read their targets from `terraform output`, so they need the stack applied
+first. Normally you would just push to `master` and let the workflow do it.
 
 To add or remove a viewer, edit the `users` list in `terraform.tfvars` and run
 `terraform apply`.
@@ -138,7 +137,6 @@ To add or remove a viewer, edit the `users` list in `terraform.tfvars` and run
 web/          React + TypeScript SPA (Vite)
 backend/      Auth Lambda — zero dependencies, node:crypto only
 deploy-aws/   Terraform: OIDC, buckets, distribution, key group, Lambda
-infra/        CloudFormation equivalent (earlier pass — pick one)
 .github/      CI and OIDC-based deploy workflows
 scripts/      Deploy, transcode and local-dev tooling
 content/      catalog.json + placeholder art (real video goes to S3)

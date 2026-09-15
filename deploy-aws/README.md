@@ -3,11 +3,8 @@
 Terraform for the whole Watcher stack: GitHub OIDC, the two private S3 buckets,
 CloudFront, the auth Lambda, and the signing key that gates `/media/*`.
 
-> **One IaC definition, please.** The repo also carries
-> `infra/cloudformation/watcher-stack.yaml` from the first pass. These two
-> describe the same infrastructure — running both against one account will
-> fight over the same resources. Pick this one and delete the CloudFormation
-> template (or vice versa) before anyone deploys.
+This is the only definition of the infrastructure — there is no CloudFormation
+equivalent to keep in sync.
 
 ---
 

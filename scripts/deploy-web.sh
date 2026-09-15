@@ -5,11 +5,10 @@
 #   ./scripts/deploy-web.sh
 set -euo pipefail
 
-STACK_NAME="${STACK_NAME:-watcher}"
 REGION="${AWS_REGION:-us-east-1}"
 
-APP_BUCKET="$(./scripts/stack-output.sh AppBucketName)"
-DISTRIBUTION_ID="$(./scripts/stack-output.sh DistributionId)"
+APP_BUCKET="$(./scripts/stack-output.sh app_bucket_name)"
+DISTRIBUTION_ID="$(./scripts/stack-output.sh distribution_id)"
 
 echo "Building the web app…"
 (cd web && npm ci && npm run build)
@@ -35,4 +34,4 @@ aws cloudfront create-invalidation \
   --paths '/index.html' '/' \
   --output text --query 'Invalidation.Id'
 
-echo "Web deployed: https://$(./scripts/stack-output.sh DistributionDomainName)"
+echo "Web deployed: https://$(./scripts/stack-output.sh distribution_domain_name)"

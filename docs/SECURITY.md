@@ -56,16 +56,24 @@ What the MVP does, and what to change before it takes real public traffic.
 7. **No CSP.** Add a `Content-Security-Policy` to the response headers policy
    once the asset origins are settled (`script-src 'self'`, `media-src 'self'`).
 
-8. **Buckets are `DeletionPolicy: Retain`.** Deleting the stack leaves them
-   behind — deliberate, so a stack mistake cannot destroy your content library,
-   but it does mean manual cleanup.
+8. **Buckets carry `prevent_destroy`.** `terraform destroy` refuses to take
+   them — deliberate, so a mistake cannot delete your content library, but it
+   does mean removing the lifecycle block if you genuinely want them gone.
 
 ## Handling the signing key
 
-The private key in `.secrets/cloudfront-private.pem` mints media access for
-anyone who holds it. It is gitignored, created `chmod 600`, and
-`generate-signing-key.sh` refuses to overwrite an existing one.
+Terraform generates the RSA signing key and holds it in state — which is why
+`deploy-aws/bootstrap/` exists: state belongs in an encrypted, versioned,
+private bucket, not on a laptop. Anyone holding that key can mint media access.
+To bring your own instead, set `signing_private_key_pem`.
 
-To rotate: generate a new pair, add the new public key to the key group
-(CloudFront accepts several), deploy the Lambda with the new private key, then
-remove the old public key once the longest cookie lifetime has passed.
+To rotate:
+
+```bash
+terraform apply -replace='tls_private_key.signing[0]'
+```
+
+`aws_cloudfront_public_key` is `create_before_destroy`, so the replacement joins
+the key group before the old key leaves it. Viewers holding cookies signed by
+the old key lose media access when it goes — within `media_ttl_seconds` they
+would have refreshed anyway.
