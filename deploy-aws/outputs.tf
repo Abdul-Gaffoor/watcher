@@ -33,11 +33,6 @@ output "github_actions_deploy_role_arn" {
   value       = aws_iam_role.github_deploy.arn
 }
 
-output "github_actions_terraform_role_arn" {
-  description = "Set as AWS_TERRAFORM_ROLE_ARN. Null unless create_terraform_role is true."
-  value       = var.create_terraform_role ? aws_iam_role.github_terraform[0].arn : null
-}
-
 output "signing_public_key_id" {
   description = "CloudFront key pair id used when signing media cookies."
   value       = aws_cloudfront_public_key.signing.id

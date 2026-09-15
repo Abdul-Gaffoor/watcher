@@ -20,15 +20,8 @@ terraform {
     }
   }
 
-  # Remote state is strongly recommended: this state contains the CloudFront
-  # signing private key and the session secret. See bootstrap/ for a backend,
-  # then uncomment and fill this in.
-  #
-  # backend "s3" {
-  #   bucket       = "watcher-tfstate-<account-id>"
-  #   key          = "watcher/terraform.tfstate"
-  #   region       = "us-east-1"
-  #   encrypt      = true
-  #   use_lockfile = true
-  # }
+  # State is local (terraform.tfstate, gitignored). It holds the CloudFront
+  # signing private key and the session secret in plaintext, so keep a backup
+  # and never commit it. Add a `backend "s3"` block here if this ever needs to
+  # be shared between machines.
 }

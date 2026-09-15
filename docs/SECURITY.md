@@ -62,10 +62,14 @@ What the MVP does, and what to change before it takes real public traffic.
 
 ## Handling the signing key
 
-Terraform generates the RSA signing key and holds it in state — which is why
-`deploy-aws/bootstrap/` exists: state belongs in an encrypted, versioned,
-private bucket, not on a laptop. Anyone holding that key can mint media access.
-To bring your own instead, set `signing_private_key_pem`.
+Terraform generates the RSA signing key and holds it in `terraform.tfstate`,
+in plaintext. Anyone holding that key can mint media access, so the state file
+is a secret: keep it backed up, keep it off shared drives, and never commit it
+(`.gitignore` covers `*.tfstate*`). To bring your own key instead, set
+`signing_private_key_pem`.
+
+Once more than one person or machine needs to apply, move state to an
+encrypted, versioned S3 bucket via a `backend "s3"` block in `versions.tf`.
 
 To rotate:
 

@@ -113,25 +113,3 @@ resource "aws_iam_role_policy" "github_deploy" {
   role   = aws_iam_role.github_deploy.id
   policy = data.aws_iam_policy_document.github_deploy.json
 }
-
-# --------------------------------------------------------- terraform role --
-
-# Deliberately broad — it manages the whole stack. Keep create_terraform_role
-# false until github_environments pins it to an approved environment.
-resource "aws_iam_role" "github_terraform" {
-  count = var.create_terraform_role ? 1 : 0
-
-  name                 = "${local.name_prefix}-github-actions-terraform"
-  description          = "Runs terraform plan/apply for the ${var.project_name} stack from CI."
-  assume_role_policy   = data.aws_iam_policy_document.github_assume_role.json
-  max_session_duration = 3600
-}
-
-resource "aws_iam_role_policy_attachment" "github_terraform" {
-  count = var.create_terraform_role ? 1 : 0
-
-  role = aws_iam_role.github_terraform[0].name
-  # PowerUserAccess cannot manage IAM, which this stack needs. Replace with a
-  # least-privilege policy once the resource set stops changing.
-  policy_arn = "arn:${local.partition}:iam::aws:policy/AdministratorAccess"
-}

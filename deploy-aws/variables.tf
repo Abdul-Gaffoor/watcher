@@ -67,16 +67,6 @@ variable "create_oidc_provider" {
   DESC
 }
 
-variable "create_terraform_role" {
-  type        = bool
-  default     = false
-  description = <<-DESC
-    Also create a broad role for running `terraform plan/apply` from CI. Off by
-    default: it is far more privileged than the deploy role, so only turn it on
-    once the subject patterns are narrowed to a protected branch or environment.
-  DESC
-}
-
 # ------------------------------------------------------------------ auth --
 
 variable "users" {

@@ -28,10 +28,6 @@ equivalent to keep in sync.
 | `watcher-api` | The Lambda's **execution role**. Every Lambda needs one — it is what lets the function write its own logs. Not a CI role. |
 | `watcher-github-actions-deploy` | The **OIDC role** GitHub Actions assumes. Can write the two buckets and invalidate this one distribution. Nothing else. |
 
-A third, `watcher-github-actions-terraform`, exists in the code but is **not
-created** — `create_terraform_role` defaults to `false`. It is only for running
-`terraform apply` from CI. Applying from a laptop, you never need it.
-
 **Two S3 buckets.** To be clear about what this is *not*: it is not the security
 boundary. The gate is the trusted key group on the `/media/*` cache behaviour,
 and that works the same whether the objects sit in one bucket or two. The split
@@ -57,19 +53,7 @@ CI push and the next apply fighting over it.
 
 ## First deploy
 
-### 1. Remote state (recommended, do it once)
-
-State holds the signing private key and the session secret, so it should not
-live on a laptop.
-
-```bash
-cd deploy-aws/bootstrap
-terraform init && terraform apply
-terraform output backend_block     # paste into ../versions.tf
-cd .. && terraform init -migrate-state
-```
-
-### 2. Configure
+### 1. Configure
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
@@ -79,7 +63,7 @@ node ../scripts/hash-password.mjs      # once per viewer; paste the hash in
 Fill in `github_owner` and `github_repo` at minimum. `terraform.tfvars` is
 gitignored — it holds password hashes.
 
-### 3. Apply
+### 2. Apply
 
 ```bash
 terraform init
@@ -98,7 +82,7 @@ terraform providers lock \
   -platform=linux_amd64 -platform=darwin_arm64 -platform=windows_amd64
 ```
 
-### 4. Wire up GitHub
+### 3. Wire up GitHub
 
 ```bash
 terraform output
@@ -118,7 +102,7 @@ Actions → Variables):
 
 No secrets are needed: OIDC replaces stored AWS keys entirely.
 
-### 5. Upload content
+### 4. Upload content
 
 ```bash
 cd ..
@@ -192,6 +176,20 @@ would have refreshed anyway.
 
 ---
 
+## State lives on your laptop
+
+`terraform.tfstate` sits next to these files, gitignored. It contains the
+CloudFront **signing private key** and the **session secret** in plaintext —
+anyone holding that key can mint media access — so:
+
+- Back it up somewhere private. Losing it means losing the ability to manage or
+  cleanly destroy the stack.
+- Never commit it. `.gitignore` covers `*.tfstate*`, but check before you
+  `git add -A` in this directory.
+
+If a second machine or another person ever needs to apply, that is the point to
+add a `backend "s3"` block to `versions.tf` and migrate — not before.
+
 ## Notes and gotchas
 
 - **`prevent_destroy` is set on both buckets** and on the state bucket. That is
@@ -203,8 +201,6 @@ would have refreshed anyway.
 - **A custom domain needs a us-east-1 certificate.** CloudFront accepts ACM
   certificates only from that region, whatever `aws_region` is set to. There is
   a `precondition` that catches a missing certificate at plan time.
-- **`create_terraform_role` attaches `AdministratorAccess`.** PowerUser cannot
-  manage IAM, which this stack needs. Narrow it once the resource set settles.
 - **The Lambda Function URL is `AuthType: NONE`** and reachable directly. The
   handler authenticates every request, but see `../docs/SECURITY.md` for how to
   put it behind CloudFront only.

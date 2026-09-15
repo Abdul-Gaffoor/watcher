@@ -21,10 +21,6 @@ github_branches = ["master"]
 # Set false if this AWS account already has a GitHub OIDC provider.
 create_oidc_provider = true
 
-# Only needed to run `terraform apply` from CI. Applying from your laptop, leave
-# this off — it is an administrative role.
-create_terraform_role = false
-
 # --- Viewers -----------------------------------------------------------------
 # Generate each hash with:  node scripts/hash-password.mjs
 users = [
