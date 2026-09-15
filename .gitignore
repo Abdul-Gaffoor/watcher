@@ -1,0 +1,26 @@
+node_modules/
+dist/
+*.local
+.DS_Store
+
+# Signing keys, password hashes and the session secret — never commit these.
+.secrets/
+
+# Smoke-test scratch space and generated fixtures.
+.e2e-tmp/
+content/media/_e2e/
+
+# Real video assets are uploaded straight to S3; only the placeholder SVG art
+# and the catalog are tracked.
+content/media/**/hls/
+content/media/**/*.mp4
+content/media/**/*.webm
+content/media/**/*.ts
+content/media/**/*.m3u8
+
+*.log
+.env
+.env.*
+
+# TypeScript incremental build state
+*.tsbuildinfo

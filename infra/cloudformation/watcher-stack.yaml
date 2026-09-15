@@ -1,0 +1,374 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Watcher MVP — private S3 buckets for the SPA and media, one CloudFront
+  distribution fronting both plus a Lambda auth API, and a trusted key group so
+  /media/* is only reachable with valid CloudFront signed cookies.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: watcher
+    AllowedPattern: '[a-z0-9-]+'
+    Description: Lowercase prefix used for bucket and resource names.
+
+  CloudFrontPublicKey:
+    Type: String
+    Description: >
+      PEM-encoded RSA public key (2048-bit) whose private half signs the media
+      cookies. Generate with scripts/generate-signing-key.sh.
+
+  SessionSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 32
+    Description: HMAC secret for session JWTs. Use at least 32 random characters.
+
+  UsersJson:
+    Type: String
+    NoEcho: true
+    Description: >
+      JSON array of viewers, e.g.
+      [{"username":"demo","name":"Demo","roles":["viewer"],"passwordHash":"scrypt$..."}].
+      Hashes come from scripts/hash-password.mjs.
+
+  SessionTtlSeconds:
+    Type: Number
+    Default: 43200
+    Description: How long a sign-in lasts (seconds).
+
+  MediaTtlSeconds:
+    Type: Number
+    Default: 3600
+    Description: Lifetime of the CloudFront signed cookies (seconds).
+
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues: [PriceClass_100, PriceClass_200, PriceClass_All]
+    Description: CloudFront edge coverage. PriceClass_All is fastest worldwide.
+
+Resources:
+  # ---------------------------------------------------------------- storage --
+
+  AppBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-app-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-media-${AWS::AccountId}-${AWS::Region}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  # Both buckets stay private; CloudFront reaches them through Origin Access
+  # Control, which signs each origin request with SigV4.
+  AppBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AppBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${AppBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  MediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${MediaBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  # ------------------------------------------------------------- signed URLs --
+
+  SigningPublicKey:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        Name: !Sub '${ProjectName}-media-signing-key'
+        CallerReference: !Sub '${ProjectName}-media-signing-key'
+        EncodedKey: !Ref CloudFrontPublicKey
+        Comment: Verifies the signed cookies issued by the Watcher auth Lambda.
+
+  SigningKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Name: !Sub '${ProjectName}-media-key-group'
+        Items:
+          - !Ref SigningPublicKey
+
+  # ------------------------------------------------------------------- auth --
+
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  # The real handler is uploaded by scripts/deploy-api.sh; this placeholder only
+  # exists so the distribution has an origin to point at on first deploy.
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-api'
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Role: !GetAtt ApiFunctionRole.Arn
+      MemorySize: 512
+      Timeout: 10
+      Architectures: [arm64]
+      Code:
+        ZipFile: |
+          export const handler = async () => ({
+            statusCode: 503,
+            headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
+            body: JSON.stringify({ error: 'API code not deployed yet. Run scripts/deploy-api.sh.' }),
+          });
+      Environment:
+        Variables:
+          SESSION_SECRET: !Ref SessionSecret
+          USERS_JSON: !Ref UsersJson
+          CLOUDFRONT_KEY_PAIR_ID: !Ref SigningPublicKey
+          SESSION_TTL_SECONDS: !Ref SessionTtlSeconds
+          MEDIA_TTL_SECONDS: !Ref MediaTtlSeconds
+          # CLOUDFRONT_PRIVATE_KEY and MEDIA_RESOURCE are set by
+          # scripts/deploy-api.sh — the resource string needs the distribution
+          # domain, which does not exist until this stack finishes.
+
+  ApiFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !GetAtt ApiFunction.Arn
+      AuthType: NONE
+
+  # The URL is public but only useful through CloudFront; lock it down with WAF
+  # or an OAC on the Lambda origin before going to production traffic.
+  ApiFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt ApiFunction.Arn
+      Action: lambda:InvokeFunctionUrl
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+  # ------------------------------------------------------------- CloudFront --
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${ProjectName}-s3-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Client-side routing: any path without a file extension is an app route, so
+  # serve the shell. Done in a CloudFront Function rather than via
+  # CustomErrorResponses, which are distribution-wide and would mask the 403s
+  # that tell the app its media cookies expired.
+  SpaRouterFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${ProjectName}-spa-router'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Rewrites SPA routes to /index.html
+        Runtime: cloudfront-js-2.0
+      FunctionCode: |
+        function handler(event) {
+          var request = event.request;
+          var uri = request.uri;
+          var lastSegment = uri.substring(uri.lastIndexOf('/') + 1);
+          if (lastSegment.indexOf('.') === -1) {
+            request.uri = '/index.html';
+          }
+          return request;
+        }
+
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${ProjectName}-security-headers'
+        SecurityHeadersConfig:
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: same-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 63072000
+            IncludeSubdomains: true
+            Override: true
+          XSSProtection:
+            Protection: true
+            ModeBlock: true
+            Override: true
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${ProjectName} streaming distribution'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref PriceClass
+
+        Origins:
+          - Id: AppOrigin
+            DomainName: !GetAtt AppBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+
+          - Id: MediaOrigin
+            DomainName: !GetAtt MediaBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+
+          - Id: ApiOrigin
+            DomainName: !Select [2, !Split ['/', !GetAtt ApiFunctionUrl.FunctionUrl]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols: [TLSv1.2]
+              HTTPSPort: 443
+
+        DefaultCacheBehavior:
+          TargetOriginId: AppOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          # Managed-CachingOptimized — honours the Cache-Control headers set on
+          # upload, so hashed assets cache for a year and index.html does not.
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt SpaRouterFunction.FunctionMetadata.FunctionARN
+
+        CacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: ApiOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+            CachedMethods: [GET, HEAD]
+            Compress: true
+            # Managed-CachingDisabled
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            # Managed-AllViewerExceptHostHeader — required for a Lambda Function
+            # URL origin, which rejects a mismatched Host.
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+
+          - PathPattern: /media/*
+            TargetOriginId: MediaOrigin
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD, OPTIONS]
+            CachedMethods: [GET, HEAD, OPTIONS]
+            Compress: true
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+            ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+            # This is the gate: without valid signed cookies CloudFront returns
+            # 403 before it ever reaches the bucket or the cache.
+            TrustedKeyGroups:
+              - !Ref SigningKeyGroup
+
+Outputs:
+  DistributionDomainName:
+    Description: Public hostname for the app.
+    Value: !GetAtt Distribution.DomainName
+    Export:
+      Name: !Sub '${AWS::StackName}-DistributionDomainName'
+
+  DistributionId:
+    Description: Used for cache invalidations.
+    Value: !Ref Distribution
+    Export:
+      Name: !Sub '${AWS::StackName}-DistributionId'
+
+  AppBucketName:
+    Value: !Ref AppBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AppBucketName'
+
+  MediaBucketName:
+    Value: !Ref MediaBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-MediaBucketName'
+
+  ApiFunctionName:
+    Value: !Ref ApiFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiFunctionName'
+
+  SigningPublicKeyId:
+    Description: CloudFront key pair id used when signing cookies.
+    Value: !Ref SigningPublicKey
+    Export:
+      Name: !Sub '${AWS::StackName}-SigningPublicKeyId'
+
+  MediaResource:
+    Description: Value to use for the Lambda MEDIA_RESOURCE variable.
+    Value: !Sub 'https://${Distribution.DomainName}/media/*'

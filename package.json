@@ -1,0 +1,21 @@
+{
+  "name": "watcher",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Private video streaming platform on S3 + CloudFront.",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "install:all": "npm install && npm --prefix web install",
+    "dev": "node scripts/dev-api.mjs",
+    "dev:web": "npm --prefix web run dev",
+    "build": "npm --prefix web run build",
+    "typecheck": "npm --prefix web run typecheck",
+    "test": "npm --prefix backend test",
+    "e2e": "node e2e/smoke.mjs",
+    "art": "node scripts/generate-placeholder-art.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-15T00:00:00Z",
+  "genres": [
+    {
+      "id": "harmonic-trading",
+      "name": "Harmonic Trading",
+      "description": "Gartley, Bat, Butterfly and Crab patterns — measured moves and Fibonacci ratios."
+    },
+    {
+      "id": "elliott-waves",
+      "name": "Elliott Waves",
+      "description": "Impulse and corrective structures, degree labelling, and wave-count discipline."
+    },
+    {
+      "id": "smc",
+      "name": "Smart Money Concepts",
+      "description": "Order blocks, liquidity sweeps, fair value gaps and market structure shifts."
+    },
+    {
+      "id": "cinema",
+      "name": "Cinema",
+      "description": "Feature films and shorts."
+    },
+    {
+      "id": "documentary",
+      "name": "Documentary",
+      "description": "Long-form non-fiction."
+    }
+  ],
+  "titles": [
+    {
+      "id": "harmonic-foundations",
+      "title": "Harmonic Foundations",
+      "genreIds": ["harmonic-trading"],
+      "description": "Build the ratio toolkit from scratch: retracement versus extension, the XABCD skeleton, and how to validate a pattern before it completes.",
+      "durationSec": 2760,
+      "year": 2025,
+      "instructor": "A. Rahman",
+      "level": "beginner",
+      "tags": ["fibonacci", "gartley", "xabcd"],
+      "poster": "/media/titles/harmonic-foundations/poster.svg",
+      "backdrop": "/media/titles/harmonic-foundations/backdrop.svg",
+      "sources": { "hls": "/media/titles/harmonic-foundations/hls/master.m3u8" },
+      "featured": true
+    },
+    {
+      "id": "gartley-in-practice",
+      "title": "The Gartley, In Practice",
+      "genreIds": ["harmonic-trading"],
+      "description": "Forty live chart reviews of the 222 pattern, including the failures — what invalidated them and where the stop belonged.",
+      "durationSec": 3540,
+      "year": 2025,
+      "instructor": "A. Rahman",
+      "level": "intermediate",
+      "tags": ["gartley", "risk"],
+      "poster": "/media/titles/gartley-in-practice/poster.svg",
+      "sources": { "hls": "/media/titles/gartley-in-practice/hls/master.m3u8" }
+    },
+    {
+      "id": "crab-and-butterfly",
+      "title": "Crab and Butterfly Extensions",
+      "genreIds": ["harmonic-trading"],
+      "description": "The extension patterns that catch exhaustion moves, and why the 1.618 projection is the line that matters.",
+      "durationSec": 2280,
+      "year": 2026,
+      "instructor": "L. Okafor",
+      "level": "advanced",
+      "tags": ["crab", "butterfly"],
+      "poster": "/media/titles/crab-and-butterfly/poster.svg",
+      "sources": { "hls": "/media/titles/crab-and-butterfly/hls/master.m3u8" }
+    },
+    {
+      "id": "elliott-first-principles",
+      "title": "Elliott Wave From First Principles",
+      "genreIds": ["elliott-waves"],
+      "description": "The three unbreakable rules, the guidelines that are only guidelines, and how to label a chart you have never seen before.",
+      "durationSec": 4020,
+      "year": 2025,
+      "instructor": "M. Sørensen",
+      "level": "beginner",
+      "tags": ["impulse", "correction", "degree"],
+      "poster": "/media/titles/elliott-first-principles/poster.svg",
+      "backdrop": "/media/titles/elliott-first-principles/backdrop.svg",
+      "sources": { "hls": "/media/titles/elliott-first-principles/hls/master.m3u8" }
+    },
+    {
+      "id": "corrective-structures",
+      "title": "Corrective Structures Decoded",
+      "genreIds": ["elliott-waves"],
+      "description": "Flats, zigzags, triangles and the combinations that defeat most wave counts. Includes a decision tree for ambiguous corrections.",
+      "durationSec": 3300,
+      "year": 2026,
+      "instructor": "M. Sørensen",
+      "level": "advanced",
+      "tags": ["zigzag", "flat", "triangle"],
+      "poster": "/media/titles/corrective-structures/poster.svg",
+      "sources": { "hls": "/media/titles/corrective-structures/hls/master.m3u8" }
+    },
+    {
+      "id": "smc-market-structure",
+      "title": "Market Structure and Liquidity",
+      "genreIds": ["smc"],
+      "description": "Where stops pool, why price reaches for them, and how to read a structure shift without hindsight bias.",
+      "durationSec": 2940,
+      "year": 2026,
+      "instructor": "D. Whitfield",
+      "level": "intermediate",
+      "tags": ["liquidity", "bos", "choch"],
+      "poster": "/media/titles/smc-market-structure/poster.svg",
+      "backdrop": "/media/titles/smc-market-structure/backdrop.svg",
+      "sources": { "hls": "/media/titles/smc-market-structure/hls/master.m3u8" }
+    },
+    {
+      "id": "order-blocks-fvg",
+      "title": "Order Blocks and Fair Value Gaps",
+      "genreIds": ["smc"],
+      "description": "A precise, testable definition of both — then a session-by-session walkthrough applying them to London and New York opens.",
+      "durationSec": 3180,
+      "year": 2026,
+      "instructor": "D. Whitfield",
+      "level": "intermediate",
+      "tags": ["order-block", "fvg", "sessions"],
+      "poster": "/media/titles/order-blocks-fvg/poster.svg",
+      "sources": { "hls": "/media/titles/order-blocks-fvg/hls/master.m3u8" }
+    },
+    {
+      "id": "the-long-exposure",
+      "title": "The Long Exposure",
+      "genreIds": ["cinema"],
+      "description": "A portrait photographer returns to a coastal town she left thirty years ago, and finds the light has not forgiven her.",
+      "durationSec": 6720,
+      "year": 2024,
+      "level": "beginner",
+      "tags": ["drama"],
+      "poster": "/media/titles/the-long-exposure/poster.svg",
+      "backdrop": "/media/titles/the-long-exposure/backdrop.svg",
+      "sources": { "hls": "/media/titles/the-long-exposure/hls/master.m3u8" }
+    },
+    {
+      "id": "night-shift",
+      "title": "Night Shift",
+      "genreIds": ["cinema"],
+      "description": "Ninety minutes, one hospital corridor, four people who will not admit what they saw.",
+      "durationSec": 5400,
+      "year": 2025,
+      "tags": ["thriller"],
+      "poster": "/media/titles/night-shift/poster.svg",
+      "sources": { "hls": "/media/titles/night-shift/hls/master.m3u8" }
+    },
+    {
+      "id": "signal-and-noise",
+      "title": "Signal and Noise",
+      "genreIds": ["documentary", "cinema"],
+      "description": "How three retail traders, a quant desk and a regulator each describe the same market crash.",
+      "durationSec": 4860,
+      "year": 2026,
+      "tags": ["markets", "finance"],
+      "poster": "/media/titles/signal-and-noise/poster.svg",
+      "sources": { "hls": "/media/titles/signal-and-noise/hls/master.m3u8" }
+    }
+  ]
+}
