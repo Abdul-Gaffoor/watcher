@@ -5,7 +5,7 @@ project_name = "watcher"
 aws_region   = "us-east-1"
 
 # --- GitHub OIDC -------------------------------------------------------------
-github_owner = "AbdulGaffoorN"
+github_owner = "Abdul-Gaffoor"
 github_repo  = "watcher"
 
 # Branches allowed to assume the deploy role. This is what deploy.yml uses.
