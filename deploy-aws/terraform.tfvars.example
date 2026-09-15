@@ -9,10 +9,10 @@ github_owner = "AbdulGaffoorN"
 github_repo  = "watcher"
 
 # Branches allowed to assume the deploy role. This is what deploy.yml uses.
-github_branches = ["main"]
+github_branches = ["master"]
 
 # Approval gating is a TWO-SIDED change. Declaring `environment: production` in
-# the workflow switches the OIDC subject from `...:ref:refs/heads/main` to
+# the workflow switches the OIDC subject from `...:ref:refs/heads/master` to
 # `...:environment:production`, so uncommenting this WITHOUT also adding
 # `environment: production` to .github/workflows/deploy.yml (or vice versa)
 # breaks the assume-role step.

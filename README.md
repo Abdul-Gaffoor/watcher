@@ -108,7 +108,7 @@ terraform output                               # URL + the GitHub repo variables
 That creates everything: the GitHub OIDC provider and deploy role, both private
 buckets, the distribution, the signing key group, and the auth Lambda.
 
-Terraform runs from your machine. From then on, pushing to `main` is the app
+Terraform runs from your machine. From then on, pushing to `master` is the app
 deploy: `.github/workflows/deploy.yml` installs dependencies, builds the SPA,
 assumes the OIDC role, syncs to S3 and invalidates CloudFront — with no
 long-lived AWS keys stored anywhere.

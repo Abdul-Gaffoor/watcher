@@ -136,7 +136,7 @@ Two conditions, and both matter:
 
 ```json
 "StringEquals": { "token.actions.githubusercontent.com:aud": "sts.amazonaws.com" },
-"StringLike":   { "token.actions.githubusercontent.com:sub": ["repo:OWNER/REPO:ref:refs/heads/main"] }
+"StringLike":   { "token.actions.githubusercontent.com:sub": ["repo:OWNER/REPO:ref:refs/heads/master"] }
 ```
 
 Drop the `sub` condition and **any GitHub repository in the world** can assume
@@ -146,7 +146,7 @@ minted for a different audience is accepted.
 **Adding an approval gate is a two-sided change.** A GitHub Environment can
 require a manual approval, which is stronger than a branch condition — but the
 moment a job declares `environment: production`, GitHub changes the token's
-`sub` from `repo:OWNER/REPO:ref:refs/heads/main` to
+`sub` from `repo:OWNER/REPO:ref:refs/heads/master` to
 `repo:OWNER/REPO:environment:production`. So you must do both:
 
 1. add `environment: production` to the job in `.github/workflows/deploy.yml`, and

@@ -37,7 +37,7 @@ variable "github_repo" {
 
 variable "github_branches" {
   type        = list(string)
-  default     = ["main"]
+  default     = ["master"]
   description = "Branches allowed to assume the deploy role. Wildcards are allowed (e.g. \"release/*\")."
 }
 
