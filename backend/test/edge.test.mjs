@@ -141,17 +141,15 @@ test('base64-encodes binary assets', async () => {
   });
 });
 
-test('falls back to the shell when a missing path looks like a file', async () => {
-  await withStubbedFetch(
-    [{ status: 404 }, { status: 200, body: '<!doctype html>' }],
-    async (requested) => {
-      const response = await handler(request('/titles/x.y'));
+test('404s a missing asset rather than answering it with the shell', async () => {
+  await withStubbedFetch([{ status: 404 }], async (requested) => {
+    const response = await handler(request('/assets/does-not-exist.js'));
 
-      assert.equal(response.statusCode, 200);
-      assert.equal(response.headers['content-type'], 'text/html; charset=utf-8');
-      assert.ok(requested[1].includes('/index.html?'));
-    },
-  );
+    // HTML in place of a missing script surfaces as a MIME type error and
+    // hides the real problem. CloudFront 404s here too.
+    assert.equal(response.statusCode, 404);
+    assert.equal(requested.length, 1);
+  });
 });
 
 test('carries the baseline security headers', async () => {

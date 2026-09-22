@@ -161,15 +161,24 @@ jobs:
           set -euo pipefail
           BASE="${{ needs.terraform.outputs.app_url }}"
 
+          # curl's own exit code is captured rather than allowed to abort the
+          # script, so a transport failure is reported as that, and an
+          # unexpected status is reported as the status it actually got.
+          failures=0
           check() {
             local name="$1" expected="$2" url="$3"
             shift 3
-            local actual
-            actual=$(curl -sS -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors \
-              --retry-delay 5 --max-time 30 "$@" "$url")
+            local actual rc
+            actual=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$@" "$url") && rc=0 || rc=$?
+            if [ "$rc" -ne 0 ]; then
+              echo "FAIL  $name: curl exited $rc  ($url)"
+              failures=$((failures + 1))
+              return 0
+            fi
             if [ "$actual" != "$expected" ]; then
               echo "FAIL  $name: wanted $expected, got $actual  ($url)"
-              return 1
+              failures=$((failures + 1))
+              return 0
             fi
             echo "ok    $name ($expected)"
           }
@@ -188,6 +197,10 @@ jobs:
             -X POST -H 'content-type: application/json' \
             --data '{"username":"nobody","password":"wrong"}'
 
+          if [ "$failures" -ne 0 ]; then
+            echo "$failures smoke check(s) failed against $BASE"
+            exit 1
+          fi
           echo "All smoke checks passed against $BASE"
 
       - name: Summary

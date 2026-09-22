@@ -166,16 +166,10 @@ async function serveApp(path, config, credentials) {
     credentials,
   });
 
-  if (object.status === 404 && key !== 'index.html') {
-    const shell = await readObject({
-      bucket: config.appBucket,
-      key: 'index.html',
-      region: config.region,
-      credentials,
-    });
-    if (shell.status !== 200) return json(404, { error: 'Not found' });
-    return bodyResponse('index.html', shell.body, 'no-cache, must-revalidate');
-  }
+  // A path that names a file and is not there is a 404, exactly as it was
+  // through CloudFront. Falling back to the shell here would answer a missing
+  // .js request with HTML, which the browser reports as a MIME type error
+  // rather than the missing file it actually is.
   if (object.status !== 200) return json(object.status === 404 ? 404 : 502, { error: 'Not found' });
 
   // Hashed filenames change on every build; the shell points at them.
