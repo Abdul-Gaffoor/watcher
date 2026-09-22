@@ -27,6 +27,27 @@ variable "aws_profile" {
   DESC
 }
 
+variable "edge" {
+  type        = string
+  default     = "cloudfront"
+  description = <<-DESC
+    What sits in front of the app.
+
+    "cloudfront" is the intended design: one distribution, media gated at the
+    edge by a trusted key group, everything cached close to the viewer.
+
+    "apigateway" is the fallback for an account that cannot create a
+    distribution. An HTTP API serves the same paths, media is gated by checking
+    the session in a Lambda that then hands back a presigned S3 URL, and
+    nothing is cached anywhere. Same domain, same certificate, same buckets.
+  DESC
+
+  validation {
+    condition     = contains(["cloudfront", "apigateway"], var.edge)
+    error_message = "edge must be \"cloudfront\" or \"apigateway\"."
+  }
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}

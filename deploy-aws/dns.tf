@@ -69,6 +69,16 @@ resource "aws_acm_certificate_validation" "this" {
 
 # Alias records, not CNAMEs: an alias can sit on a zone apex, resolves without
 # an extra lookup, and costs nothing to query.
+locals {
+  alias_target = local.use_cloudfront ? {
+    name    = try(aws_cloudfront_distribution.this[0].domain_name, null)
+    zone_id = try(aws_cloudfront_distribution.this[0].hosted_zone_id, null)
+    } : {
+    name    = try(aws_apigatewayv2_domain_name.this[0].domain_name_configuration[0].target_domain_name, null)
+    zone_id = try(aws_apigatewayv2_domain_name.this[0].domain_name_configuration[0].hosted_zone_id, null)
+  }
+}
+
 resource "aws_route53_record" "app_ipv4" {
   count = local.manage_dns ? 1 : 0
 
@@ -77,24 +87,25 @@ resource "aws_route53_record" "app_ipv4" {
   type    = "A"
 
   alias {
-    name                   = aws_cloudfront_distribution.this.domain_name
-    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    name                   = local.alias_target.name
+    zone_id                = local.alias_target.zone_id
     evaluate_target_health = false
   }
 }
 
-# The distribution has is_ipv6_enabled, which does nothing for these viewers
-# unless the name also answers AAAA.
+# CloudFront answers on IPv6 and a regional API Gateway endpoint does not, so
+# this record only exists in the mode that can serve it. Publishing an AAAA
+# that nothing answers would strand IPv6-only clients.
 resource "aws_route53_record" "app_ipv6" {
-  count = local.manage_dns ? 1 : 0
+  count = local.manage_dns && local.use_cloudfront ? 1 : 0
 
   zone_id = var.route53_zone_id
   name    = var.domain_name
   type    = "AAAA"
 
   alias {
-    name                   = aws_cloudfront_distribution.this.domain_name
-    zone_id                = aws_cloudfront_distribution.this.hosted_zone_id
+    name                   = local.alias_target.name
+    zone_id                = local.alias_target.zone_id
     evaluate_target_health = false
   }
 }

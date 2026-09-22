@@ -161,6 +161,42 @@ cd ..
 
 ---
 
+## Two front ends, one variable
+
+`edge` decides what sits in front of the app. Everything else in the stack is
+shared: the same domain, the same certificate, the same buckets, the same auth
+Lambda.
+
+| | `cloudfront` | `apigateway` |
+| --- | --- | --- |
+| Front end | One distribution | One HTTP API, regional |
+| Media gate | Trusted key group, at the edge | Session checked in a Lambda, then a presigned S3 URL |
+| Caching | Edge cache, shared between viewers | None |
+| SPA routing | CloudFront Function | The edge Lambda |
+| IPv6 | Yes | No, so no AAAA record is published |
+| Cost shape | Requests plus egress | An invocation per asset and per segment |
+
+`cloudfront` is the design. `apigateway` exists because AWS gates
+`CreateDistribution` on an account it has not verified, and that gate has no
+workaround from this side. Switching is one line in `terraform.tfvars` and one
+apply. The CloudFront function, origin access control, key group and signing
+key are all free and stay created in both modes, so going back creates only the
+distribution itself.
+
+### What the fallback costs
+
+Every request is served from one region with no cache in front of it. For the
+app shell that is a few hundred milliseconds; for video it means the origin
+pays for every segment of every viewing. Do not leave a real audience on it.
+
+### Adding a viewer behind either front end
+
+Unchanged: edit `users` in `terraform.tfvars` and apply. The auth Lambda is the
+same code in both modes. It simply stops issuing CloudFront cookies when there
+is no key group to sign for.
+
+---
+
 ## Why the OIDC trust policy looks like that
 
 Two conditions, and both matter:

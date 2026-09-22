@@ -74,19 +74,26 @@ function issueSession(user) {
     config.sessionSecret,
   );
 
-  const signed = createSignedCookies({
-    resource: config.mediaResource,
-    expiresAt: mediaExpiresAt,
-    keyPairId: config.keyPairId,
-    privateKey: config.privateKey,
-  });
-
   const cookies = [
     cookie(SESSION_COOKIE, token, { maxAge: config.sessionTtlSeconds, domain: config.cookieDomain }),
-    ...CF_COOKIES.map((name) =>
-      cookie(name, signed[name], { maxAge: config.mediaTtlSeconds, domain: config.cookieDomain }),
-    ),
   ];
+
+  // Behind API Gateway there is no key group to sign against, and media is
+  // gated by checking this same session on each request instead. Issuing
+  // cookies no edge will ever verify would only mislead.
+  if (config.signsMediaCookies) {
+    const signed = createSignedCookies({
+      resource: config.mediaResource,
+      expiresAt: mediaExpiresAt,
+      keyPairId: config.keyPairId,
+      privateKey: config.privateKey,
+    });
+    cookies.push(
+      ...CF_COOKIES.map((name) =>
+        cookie(name, signed[name], { maxAge: config.mediaTtlSeconds, domain: config.cookieDomain }),
+      ),
+    );
+  }
 
   return {
     cookies,

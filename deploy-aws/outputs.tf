@@ -1,16 +1,32 @@
 output "app_url" {
   description = "Where the platform is served."
-  value       = var.domain_name != null ? "https://${var.domain_name}" : "https://${aws_cloudfront_distribution.this.domain_name}"
+  value = (
+    var.domain_name != null
+    ? "https://${var.domain_name}"
+    : try("https://${aws_cloudfront_distribution.this[0].domain_name}", try(aws_apigatewayv2_api.this[0].api_endpoint, ""))
+  )
 }
 
 output "distribution_domain_name" {
-  description = "CloudFront's generated hostname. Point a CNAME here for a custom domain."
-  value       = aws_cloudfront_distribution.this.domain_name
+  description = "CloudFront's generated hostname. Empty when the front end is API Gateway."
+  value       = try(aws_cloudfront_distribution.this[0].domain_name, "")
 }
 
+# Empty rather than null so `terraform output -raw` succeeds in both modes and
+# the deploy workflow can simply test for a value.
 output "distribution_id" {
-  description = "Needed for cache invalidations."
-  value       = aws_cloudfront_distribution.this.id
+  description = "Needed for cache invalidations. Empty when there is nothing to invalidate."
+  value       = try(aws_cloudfront_distribution.this[0].id, "")
+}
+
+output "edge" {
+  description = "Which front end is deployed: cloudfront or apigateway."
+  value       = var.edge
+}
+
+output "api_endpoint" {
+  description = "The HTTP API's generated hostname. Empty when the front end is CloudFront."
+  value       = try(aws_apigatewayv2_api.this[0].api_endpoint, "")
 }
 
 output "app_bucket_name" {
@@ -44,7 +60,7 @@ output "github_allowed_subjects" {
 }
 
 output "media_policy_resource" {
-  description = "Resource string the signed-cookie policy is scoped to."
+  description = "Resource the signed-cookie policy is scoped to. Null behind API Gateway, where the session gates media instead."
   value       = local.media_resource
 }
 

@@ -109,6 +109,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "media" {
 # Read access is granted to the CloudFront service principal, and narrowed by
 # SourceArn to this one distribution.
 data "aws_iam_policy_document" "app_bucket" {
+  count = local.use_cloudfront ? 1 : 0
+
   statement {
     sid     = "AllowCloudFrontRead"
     effect  = "Allow"
@@ -124,12 +126,14 @@ data "aws_iam_policy_document" "app_bucket" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.this.arn]
+      values   = [aws_cloudfront_distribution.this[0].arn]
     }
   }
 }
 
 data "aws_iam_policy_document" "media_bucket" {
+  count = local.use_cloudfront ? 1 : 0
+
   statement {
     sid     = "AllowCloudFrontRead"
     effect  = "Allow"
@@ -145,19 +149,44 @@ data "aws_iam_policy_document" "media_bucket" {
     condition {
       test     = "StringEquals"
       variable = "AWS:SourceArn"
-      values   = [aws_cloudfront_distribution.this.arn]
+      values   = [aws_cloudfront_distribution.this[0].arn]
     }
   }
 }
 
+# Only CloudFront needs a bucket policy. Behind API Gateway the reading is done
+# by a Lambda with an IAM role, and the presigned URLs it hands out inherit that
+# role's permission, so the buckets stay reachable with no policy at all.
 resource "aws_s3_bucket_policy" "app" {
+  count = local.use_cloudfront ? 1 : 0
+
   bucket     = aws_s3_bucket.app.id
-  policy     = data.aws_iam_policy_document.app_bucket.json
+  policy     = data.aws_iam_policy_document.app_bucket[0].json
   depends_on = [aws_s3_bucket_public_access_block.app]
 }
 
 resource "aws_s3_bucket_policy" "media" {
+  count = local.use_cloudfront ? 1 : 0
+
   bucket     = aws_s3_bucket.media.id
-  policy     = data.aws_iam_policy_document.media_bucket.json
+  policy     = data.aws_iam_policy_document.media_bucket[0].json
   depends_on = [aws_s3_bucket_public_access_block.media]
+}
+
+# A segment request starts same-origin and is redirected to S3, which makes the
+# final fetch cross-origin. Without this the player can reach the bytes but the
+# browser refuses to hand them over.
+resource "aws_s3_bucket_cors_configuration" "media" {
+  count = local.use_apigateway ? 1 : 0
+
+  bucket = aws_s3_bucket.media.id
+
+  cors_rule {
+    allowed_methods = ["GET", "HEAD"]
+    allowed_origins = var.domain_name == null ? ["*"] : ["https://${var.domain_name}"]
+    allowed_headers = ["*"]
+    # hls.js reads these off a range response to drive seeking.
+    expose_headers  = ["Content-Length", "Content-Range", "Content-Type", "ETag", "Accept-Ranges"]
+    max_age_seconds = 3000
+  }
 }

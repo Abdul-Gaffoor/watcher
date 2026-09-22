@@ -84,6 +84,10 @@ resource "aws_cloudfront_response_headers_policy" "security" {
 }
 
 resource "aws_cloudfront_distribution" "this" {
+  # The one resource an unverified account cannot create. Everything else in
+  # this file is free and stays, so switching back is a variable change.
+  count = local.use_cloudfront ? 1 : 0
+
   enabled             = true
   comment             = "${var.project_name} streaming distribution"
   default_root_object = "index.html"

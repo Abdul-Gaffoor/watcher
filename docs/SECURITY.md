@@ -45,18 +45,27 @@ What the MVP does, and what to change before it takes real public traffic.
    redeployed by hand. Move to Cognito (or a user table) once there are more
    than a handful of viewers.
 
-5. **Signed cookies are bearer credentials.** Anyone who copies them out of a
+5. **Presigned URLs are bearer credentials, and they live in a URL.** This
+   applies only to `edge = "apigateway"`. A signed cookie is `HttpOnly` and
+   unreachable from JavaScript; a presigned URL is a plain link, so it can leak
+   through a referrer header, a proxy log, or a shared address bar. The
+   `media_ttl_seconds` window bounds it, and the URL can never grant more than
+   the edge Lambda's role, which is `s3:GetObject` on two buckets and nothing
+   else. Shorten the TTL if that matters. The CloudFront path does not have
+   this property and is the better one to be on.
+
+6. **Signed cookies are bearer credentials.** Anyone who copies them out of a
    signed-in browser can fetch segments until they expire. The 1-hour TTL limits
    the window; shorten `MediaTtlSeconds` if that matters. Genuine anti-piracy
    needs DRM, which is out of scope here.
 
-6. **No access logging.** Enable CloudFront standard logs to an S3 bucket, or
+7. **No access logging.** Enable CloudFront standard logs to an S3 bucket, or
    real-time logs to Kinesis, before you need to investigate anything.
 
-7. **No CSP.** Add a `Content-Security-Policy` to the response headers policy
+8. **No CSP.** Add a `Content-Security-Policy` to the response headers policy
    once the asset origins are settled (`script-src 'self'`, `media-src 'self'`).
 
-8. **GitHub Actions holds long-lived AWS keys.** `AWS_ACCESS_KEY` and
+9. **GitHub Actions holds long-lived AWS keys.** `AWS_ACCESS_KEY` and
    `AWS_SECRET_KEY` are static credentials in repository secrets. They do not
    expire on their own, they are as powerful as the IAM user behind them, and
    anyone who can push a workflow change to `master` can use them. The stack
@@ -65,7 +74,7 @@ What the MVP does, and what to change before it takes real public traffic.
    to `deploy.yml` alone. Until then: give that IAM user only the permissions
    the apply needs, and rotate the key pair on a schedule.
 
-9. **Buckets carry `prevent_destroy`.** `terraform destroy` refuses to take
+10. **Buckets carry `prevent_destroy`.** `terraform destroy` refuses to take
    them — deliberate, so a mistake cannot delete your content library, but it
    does mean removing the lifecycle block if you genuinely want them gone.
 

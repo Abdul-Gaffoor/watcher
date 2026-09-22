@@ -55,15 +55,19 @@ resource "aws_lambda_function" "api" {
   timeout       = 10
 
   environment {
-    variables = {
-      USERS_JSON             = local.users_json
-      SESSION_SECRET         = random_password.session_secret.result
+    variables = merge({
+      USERS_JSON          = local.users_json
+      SESSION_SECRET      = random_password.session_secret.result
+      SESSION_TTL_SECONDS = tostring(var.session_ttl_seconds)
+      MEDIA_TTL_SECONDS   = tostring(var.media_ttl_seconds)
+      }, local.use_cloudfront ? {
+      # The signer is configured as a set or not at all. Absent, the handler
+      # stops issuing cookies no edge would verify and media is gated by the
+      # session instead.
       CLOUDFRONT_KEY_PAIR_ID = aws_cloudfront_public_key.signing.id
       CLOUDFRONT_PRIVATE_KEY = local.signing_private_key
       MEDIA_RESOURCE         = local.media_resource
-      SESSION_TTL_SECONDS    = tostring(var.session_ttl_seconds)
-      MEDIA_TTL_SECONDS      = tostring(var.media_ttl_seconds)
-    }
+    } : {})
   }
 
   depends_on = [

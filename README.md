@@ -119,6 +119,13 @@ One consequence worth knowing: the signed-cookie policy names that host exactly,
 so **video plays on the custom domain only**. The `*.cloudfront.net` address
 still loads the app and signs you in, but its segment requests return 403.
 
+**Currently running without CloudFront.** AWS gates distribution creation on
+accounts it has not verified, and this one is still waiting, so `edge` is set to
+`apigateway` in `terraform.tfvars`. An HTTP API serves the same domain with the
+same certificate, media is gated by a Lambda that checks the session and hands
+back a presigned S3 URL, and nothing is cached. Set `edge = "cloudfront"` and
+apply once the account clears. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 Pushing to `master` does the whole thing. `.github/workflows/deploy.yml` applies
 Terraform first, then publishes the app into the buckets that apply produced,
 reading the bucket names and the distribution id from Terraform's outputs rather

@@ -21,6 +21,13 @@ create_oidc_provider = true
 
 price_class = "PriceClass_100"
 
+# CloudFront is blocked on this account pending AWS verification, so the front
+# end is an HTTP API instead: same domain, same certificate, same buckets, but
+# media is gated by the session in a Lambda rather than by a key group at the
+# edge, and nothing is cached. Set this back to "cloudfront" once the account
+# is verified; the distribution is the only resource that has to be created.
+edge = "apigateway"
+
 domain_name     = "watcher.moderndayjourney.me"
 route53_zone_id = "Z063013830JENA0YBKB28"
 

@@ -95,16 +95,22 @@ data "aws_iam_policy_document" "github_deploy" {
     ]
   }
 
-  # Scoped to this distribution: a deploy job cannot touch any other one.
-  statement {
-    sid    = "InvalidateThisDistribution"
-    effect = "Allow"
-    actions = [
-      "cloudfront:CreateInvalidation",
-      "cloudfront:GetInvalidation",
-      "cloudfront:ListInvalidations",
-    ]
-    resources = [aws_cloudfront_distribution.this.arn]
+  # Scoped to this distribution: a deploy job cannot touch any other one. There
+  # is nothing to invalidate when the front end is API Gateway, so the grant
+  # disappears with the distribution rather than widening to a wildcard.
+  dynamic "statement" {
+    for_each = local.use_cloudfront ? [aws_cloudfront_distribution.this[0].arn] : []
+
+    content {
+      sid    = "InvalidateThisDistribution"
+      effect = "Allow"
+      actions = [
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations",
+      ]
+      resources = [statement.value]
+    }
   }
 }
 

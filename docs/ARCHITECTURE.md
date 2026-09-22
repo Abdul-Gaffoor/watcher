@@ -19,6 +19,40 @@ Consequences worth knowing:
 - **One TLS handshake and one connection** for the shell, the API and the video,
   multiplexed over HTTP/2 or HTTP/3.
 
+## The fallback front end
+
+CloudFront cannot be created on an account AWS has not verified, and that check
+sits on `CreateDistribution` alone. `edge = "apigateway"` in `terraform.tfvars`
+swaps the distribution for an HTTP API on the same domain, with the same
+certificate and the same buckets:
+
+| Path | Integration | Gate |
+| --- | --- | --- |
+| `/api/*` | the auth Lambda, unchanged | session JWT, in the handler |
+| `/media/*` | the edge Lambda | session JWT, then a presigned S3 URL |
+| everything else | the edge Lambda | none (public shell) |
+
+The auth Lambda needs no changes at all: API Gateway's payload format 2.0 is the
+same event shape a Function URL sends, down to the `cookies` array in both
+directions.
+
+**Media is gated in code rather than at an edge.** There is no key group to
+trust, so the edge Lambda verifies the session itself and then hands back a
+302 to a presigned S3 URL that expires on the same clock the cookies would
+have. The bucket is never public; the URL carries its own signature.
+
+**Playlists are served inline, segments are redirected.** A player resolves the
+names inside a `.m3u8` against the URL it was finally fetched from. Redirecting
+a playlist to S3 would rebase every segment onto an unsigned S3 URL, so the
+playlist stays on this origin and only its segments redirect. That redirect is
+what makes the media bucket need a CORS rule: the request starts same-origin
+and finishes cross-origin.
+
+**What this costs.** Everything, cached nowhere. Each asset and each video
+segment is a Lambda invocation plus an S3 read in one region, for every viewer,
+every time. It is a way to be live, not a way to serve video well, and
+`edge = "cloudfront"` is a one-line change back once the account is verified.
+
 ## Access control
 
 ```

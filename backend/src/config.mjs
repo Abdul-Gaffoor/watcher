@@ -42,15 +42,31 @@ export function getConfig() {
     cached = {
       users: loadUsers(),
       sessionSecret: required('SESSION_SECRET'),
-      keyPairId: required('CLOUDFRONT_KEY_PAIR_ID'),
+      // Optional as a set. With CloudFront the signed cookies are how /media/*
+      // opens; behind API Gateway there is no key group to sign for, and the
+      // session JWT alone gates media. Leaving these unset selects the second
+      // mode, so one build of this handler serves both.
+      keyPairId: process.env.CLOUDFRONT_KEY_PAIR_ID || null,
       // Newlines survive the Lambda console and CloudFormation more reliably
       // when escaped, so accept both forms.
-      privateKey: required('CLOUDFRONT_PRIVATE_KEY').replace(/\\n/g, '\n'),
-      mediaResource: required('MEDIA_RESOURCE'),
+      privateKey: process.env.CLOUDFRONT_PRIVATE_KEY
+        ? process.env.CLOUDFRONT_PRIVATE_KEY.replace(/\\n/g, '\n')
+        : null,
+      mediaResource: process.env.MEDIA_RESOURCE || null,
       cookieDomain: process.env.COOKIE_DOMAIN || undefined,
       sessionTtlSeconds: seconds('SESSION_TTL_SECONDS', 12 * 60 * 60),
       mediaTtlSeconds: seconds('MEDIA_TTL_SECONDS', 60 * 60),
     };
+
+    const signerParts = [cached.keyPairId, cached.privateKey, cached.mediaResource];
+    const configured = signerParts.filter(Boolean).length;
+    if (configured !== 0 && configured !== signerParts.length) {
+      cached = undefined;
+      throw new Error(
+        'CLOUDFRONT_KEY_PAIR_ID, CLOUDFRONT_PRIVATE_KEY and MEDIA_RESOURCE must be set together or not at all',
+      );
+    }
+    cached.signsMediaCookies = configured === signerParts.length;
   }
   return cached;
 }

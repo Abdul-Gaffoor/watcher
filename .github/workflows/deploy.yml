@@ -40,6 +40,7 @@ jobs:
       media_bucket: ${{ steps.output.outputs.media_bucket }}
       distribution_id: ${{ steps.output.outputs.distribution_id }}
       app_url: ${{ steps.output.outputs.app_url }}
+      edge: ${{ steps.output.outputs.edge }}
 
     steps:
       - uses: actions/checkout@v4
@@ -83,6 +84,7 @@ jobs:
             echo "media_bucket=$(terraform output -raw media_bucket_name)"
             echo "distribution_id=$(terraform output -raw distribution_id)"
             echo "app_url=$(terraform output -raw app_url)"
+            echo "edge=$(terraform output -raw edge)"
           } >> "$GITHUB_OUTPUT"
 
   app:
@@ -136,7 +138,10 @@ jobs:
             --cache-control 'public, max-age=31536000, immutable'
 
       # Only the two mutable paths, which keeps deploys inside the free tier.
+      # Skipped behind API Gateway: there is no edge cache to invalidate, so
+      # an upload is live the moment it lands.
       - name: Invalidate the shell and catalog
+        if: needs.terraform.outputs.distribution_id != ''
         run: |
           set -euo pipefail
           INVALIDATION_ID=$(aws cloudfront create-invalidation \
@@ -149,4 +154,9 @@ jobs:
             --id "$INVALIDATION_ID"
 
       - name: Summary
-        run: echo "Deployed to ${{ needs.terraform.outputs.app_url }}" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          {
+            echo "Deployed to ${{ needs.terraform.outputs.app_url }}"
+            echo ""
+            echo "Front end: \`${{ needs.terraform.outputs.edge }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

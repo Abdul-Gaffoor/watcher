@@ -9,6 +9,9 @@ locals {
 
   aliases = var.domain_name == null ? [] : [var.domain_name]
 
+  use_cloudfront = var.edge == "cloudfront"
+  use_apigateway = var.edge == "apigateway"
+
   # Terraform requests and validates the certificate itself only when it also
   # controls DNS; an explicitly supplied ARN always wins.
   create_certificate = var.domain_name != null && var.acm_certificate_arn == null && var.route53_zone_id != null
@@ -55,7 +58,11 @@ locals {
    * every segment comes back 403. That is the intended trade — one canonical
    * address — and it is why app_url points at the domain.
    */
-  media_resource = var.domain_name == null ? "https://*/media/*" : "https://${var.domain_name}/media/*"
+  media_resource = (
+    !local.use_cloudfront
+    ? null
+    : var.domain_name == null ? "https://*/media/*" : "https://${var.domain_name}/media/*"
+  )
 
   # Shape the roster the way the Lambda expects, dropping nulls.
   users_json = jsonencode([
