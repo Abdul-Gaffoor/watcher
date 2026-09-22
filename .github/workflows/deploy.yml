@@ -153,6 +153,43 @@ jobs:
             --distribution-id "${{ needs.terraform.outputs.distribution_id }}" \
             --id "$INVALIDATION_ID"
 
+      # Proves the deploy actually serves, rather than that the upload
+      # succeeded. Each check is one property of the front end, so a failure
+      # names which one broke.
+      - name: Smoke test the live site
+        run: |
+          set -euo pipefail
+          BASE="${{ needs.terraform.outputs.app_url }}"
+
+          check() {
+            local name="$1" expected="$2" url="$3"
+            shift 3
+            local actual
+            actual=$(curl -sS -o /dev/null -w '%{http_code}' --retry 5 --retry-all-errors \
+              --retry-delay 5 --max-time 30 "$@" "$url")
+            if [ "$actual" != "$expected" ]; then
+              echo "FAIL  $name: wanted $expected, got $actual  ($url)"
+              return 1
+            fi
+            echo "ok    $name ($expected)"
+          }
+
+          # The shell, and a client-side route that has no object behind it.
+          check "app shell"        200 "$BASE/"
+          check "spa routing"      200 "$BASE/watch/harmonic-foundations"
+          check "hashed asset 404" 404 "$BASE/assets/does-not-exist.js"
+
+          # The gate. Signed out, media must not come back.
+          check "media is gated"   403 "$BASE/media/catalog.json"
+
+          # The auth API, reachable and still rejecting bad credentials.
+          check "api health"       200 "$BASE/api/health"
+          check "bad login"        401 "$BASE/api/login" \
+            -X POST -H 'content-type: application/json' \
+            --data '{"username":"nobody","password":"wrong"}'
+
+          echo "All smoke checks passed against $BASE"
+
       - name: Summary
         run: |
           {
