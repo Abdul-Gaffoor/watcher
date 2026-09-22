@@ -152,6 +152,16 @@ test('404s a missing asset rather than answering it with the shell', async () =>
   });
 });
 
+test('surfaces an unexpected S3 status as a server error, not a 404', async () => {
+  // A 403 here means the role lost s3:ListBucket. Reporting it as "not found"
+  // would send someone hunting for a missing file that is really there.
+  await withStubbedFetch([{ status: 403 }], async () => {
+    const response = await handler(request('/assets/index-abc123.js'));
+
+    assert.equal(response.statusCode, 502);
+  });
+});
+
 test('carries the baseline security headers', async () => {
   await withStubbedFetch([{ status: 200, body: '<!doctype html>' }], async () => {
     const response = await handler(request('/'));

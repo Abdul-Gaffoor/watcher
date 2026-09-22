@@ -92,7 +92,15 @@ function signedIn(event, sessionSecret) {
 async function readObject({ bucket, key, region, credentials }) {
   const url = presignGetObject({ bucket, key, region, credentials, expiresIn: SHORT_FETCH_TTL });
   const response = await fetch(url);
-  if (!response.ok) return { status: response.status, body: null };
+  if (!response.ok) {
+    // 404 is ordinary. Anything else is a misconfiguration worth seeing in the
+    // logs, and a 403 here specifically means the role lost s3:ListBucket,
+    // which would otherwise disguise every missing object as a server error.
+    if (response.status !== 404) {
+      console.error(`S3 GET ${bucket}/${key} returned ${response.status}`);
+    }
+    return { status: response.status, body: null };
+  }
   return { status: 200, body: Buffer.from(await response.arrayBuffer()) };
 }
 

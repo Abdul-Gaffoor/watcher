@@ -46,6 +46,21 @@ data "aws_iam_policy_document" "edge_read_buckets" {
       "${aws_s3_bucket.media.arn}/*",
     ]
   }
+
+  # Without ListBucket, S3 answers a GET for a key that does not exist with 403
+  # rather than 404, to avoid telling an unauthorised caller which keys exist.
+  # Here the caller is our own function, and that disguise turns every missing
+  # file into an indistinguishable permission error. Granting it on the bucket
+  # itself, not its objects, makes a 404 mean what it says.
+  statement {
+    sid     = "DistinguishMissingFromForbidden"
+    effect  = "Allow"
+    actions = ["s3:ListBucket"]
+    resources = [
+      aws_s3_bucket.app.arn,
+      aws_s3_bucket.media.arn,
+    ]
+  }
 }
 
 resource "aws_iam_role_policy" "edge_read_buckets" {
