@@ -13,8 +13,21 @@ export function Header() {
   // Keep the box in step with the URL when the viewer navigates back or forward.
   useEffect(() => setQuery(searchParams.get('q') ?? ''), [searchParams]);
 
+  /**
+   * The bar is transparent over the billboard and only takes a background once
+   * there is content scrolled behind it. Passive, because this fires often and
+   * never prevents the scroll.
+   */
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 24);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
-    <header className="header">
+    <header className={scrolled ? 'header header--scrolled' : 'header'}>
       <Link className="header__brand" to="/">
         <span className="header__mark" aria-hidden="true" />
         Watcher

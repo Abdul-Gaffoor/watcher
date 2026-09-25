@@ -1,16 +1,21 @@
 :root {
-  --bg: #0b0d12;
-  --bg-elevated: #141822;
-  --bg-input: #1b2030;
-  --border: #252b3b;
-  --text: #eef1f7;
-  --text-muted: #9aa3b8;
-  --accent: #4f8cff;
-  --accent-hover: #6ea0ff;
+  /* Near-black rather than pure black: it keeps the artwork from looking like
+     it is floating in a void, which is why the reference does the same. */
+  --bg: #141414;
+  --bg-elevated: #1f1f1f;
+  --bg-input: #333;
+  --border: #333;
+  --text: #fff;
+  --text-muted: #b3b3b3;
+  --accent: #e50914;
+  --accent-hover: #f6121d;
   --danger: #ff6b6b;
-  --radius: 10px;
-  --radius-lg: 16px;
-  --header-height: 60px;
+  /* Thumbnails are nearly square-cornered; a large radius reads as a web app
+     rather than a television interface. */
+  --radius: 4px;
+  --radius-lg: 6px;
+  --header-height: 68px;
+  --gutter: 4vw;
   color-scheme: dark;
 }
 
@@ -27,7 +32,10 @@ body {
 body {
   background: var(--bg);
   color: var(--text);
-  font: 15px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  /* A tight grotesque, which is the closest freely available match for the
+     proprietary face the reference uses. */
+  font: 16px/1.5 'Helvetica Neue', Helvetica, Arial, 'Segoe UI', Roboto, sans-serif;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -123,66 +131,89 @@ img {
 
 /* ---------- Header ---------- */
 
+/* Fixed and transparent, so the billboard runs underneath it and the page
+   begins at the top of the screen. It only gains a background once there is
+   something scrolled behind it to separate from. */
 .header {
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 20;
+  left: 0;
+  right: 0;
+  z-index: 30;
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 22px;
   min-height: var(--header-height);
-  padding: 10px 24px;
-  background: rgba(11, 13, 18, 0.88);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  padding: 0 var(--gutter);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0) 100%);
+  transition: background-color 0.3s ease;
   flex-wrap: wrap;
 }
 
+.header--scrolled {
+  background: var(--bg);
+}
+
+/* A wordmark, not a logo with a lockup: heavy, condensed, uppercase and red. */
 .header__brand {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 .header__mark {
-  width: 22px;
+  width: 16px;
   height: 22px;
-  border-radius: 6px;
-  background: linear-gradient(140deg, var(--accent), #a855f7);
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--accent), #7f060c);
+  transform: skewX(-8deg);
 }
 
 .header__nav {
   display: flex;
   gap: 18px;
+  align-items: center;
   flex: 1;
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  color: var(--text-muted);
+  color: #e5e5e5;
   font-size: 14px;
   white-space: nowrap;
+}
+
+.header__nav a {
+  transition: color 0.2s ease;
 }
 
 .header__nav::-webkit-scrollbar {
   display: none;
 }
 
-.header__nav a:hover,
+.header__nav a:hover {
+  color: var(--text-muted);
+}
+
 .header__nav a.is-active {
   color: var(--text);
+  font-weight: 700;
 }
 
 .header__search input {
-  width: 180px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
+  width: 200px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: var(--radius);
-  background: var(--bg-input);
+  background: rgba(0, 0, 0, 0.6);
   color: var(--text);
   font: inherit;
+  font-size: 14px;
 }
 
 .header__search input:focus-visible,
@@ -209,7 +240,7 @@ img {
 /* ---------- Page scaffolding ---------- */
 
 .page {
-  padding: 0 24px 64px;
+  padding: var(--header-height) var(--gutter) 64px;
 }
 
 .page--centered {
@@ -239,57 +270,147 @@ img {
 
 /* ---------- Hero ---------- */
 
+/* The billboard. Pulled up under the fixed header so the artwork starts at the
+   very top of the window, and tall enough that the first row of thumbnails
+   peeks in at the bottom, which is what invites the first scroll. */
 .hero {
   position: relative;
-  margin: 0 -24px 8px;
-  padding: 72px 24px 56px;
+  display: flex;
+  /* Anchored low rather than centred: it leaves the artwork room to breathe
+     above the text instead of a dead band beneath it. */
+  align-items: flex-end;
+  margin: calc(var(--header-height) * -1) calc(var(--gutter) * -1) 0;
+  padding: var(--header-height) var(--gutter) 0;
+  min-height: min(80vh, 56.25vw);
   background-size: cover;
-  background-position: center;
+  background-position: center 20%;
   background-color: var(--bg-elevated);
 }
 
+/* Two gradients, not one: sideways so the text always has contrast, and
+   upwards so the artwork dissolves into the rows instead of ending on a line. */
 .hero__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(11, 13, 18, 0.96) 0%, rgba(11, 13, 18, 0.7) 50%, rgba(11, 13, 18, 0.3) 100%);
+  /* Order matters: the first layer paints on top. The bottom fade has to be
+     first, or the sideways scrim keeps darkening the join and leaves a seam
+     where the billboard meets the rows. */
+  background:
+    linear-gradient(180deg, rgba(20, 20, 20, 0) 55%, rgba(20, 20, 20, 0.6) 82%, var(--bg) 100%),
+    linear-gradient(77deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.45) 48%, rgba(0, 0, 0, 0) 78%);
 }
 
 .hero__content {
   position: relative;
-  max-width: 560px;
+  max-width: 36rem;
+  padding-bottom: 9vw;
 }
 
 .hero__eyebrow {
-  margin: 0 0 8px;
-  color: var(--accent);
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--text);
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
+}
+
+.hero__eyebrow::before {
+  content: '';
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--accent);
 }
 
 .hero__title {
   margin: 0;
-  font-size: clamp(28px, 5vw, 46px);
-  line-height: 1.1;
-  letter-spacing: -0.03em;
+  font-size: clamp(30px, 5.6vw, 76px);
+  overflow-wrap: break-word;
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.02em;
+  /* Lifts the title off busy artwork without needing a heavier scrim. */
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.65);
 }
 
 .hero__meta {
-  margin: 10px 0 0;
-  color: var(--text-muted);
-  font-size: 14px;
+  margin: 14px 0 0;
+  color: #d2d2d2;
+  font-size: 15px;
+  font-weight: 600;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
 }
 
 .hero__description {
   margin: 14px 0 22px;
-  color: #cbd2e2;
+  max-width: 34rem;
+  color: #e5e5e5;
+  font-size: clamp(14px, 1.2vw, 17px);
+  line-height: 1.45;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.7);
+}
+
+/* Clamped by default so the billboard keeps its shape; the More info control
+   releases it rather than opening a panel that would hide the artwork. */
+.hero__description--clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+/* The primary action is white, not branded: it has to read as "play" at a
+   glance from across a room. */
+.button--hero {
+  padding: 11px 26px;
+  border-radius: var(--radius);
+  background: #fff;
+  color: #000;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.button--hero:hover {
+  background: rgba(255, 255, 255, 0.78);
+  color: #000;
+}
+
+.button--hero-secondary {
+  padding: 11px 24px;
+  border-radius: var(--radius);
+  background: rgba(109, 109, 110, 0.7);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.button--hero-secondary:hover {
+  background: rgba(109, 109, 110, 0.5);
 }
 
 /* ---------- Rows and grids ---------- */
 
 .row {
-  margin-top: 34px;
+  /* Negative side margins let the thumbnails run to the screen edge while the
+     heading stays on the gutter, which is what makes a row feel endless. */
+  margin: 3vw calc(var(--gutter) * -1) 0;
+  padding: 0 var(--gutter);
+  position: relative;
+}
+
+/* Hover lifts a card above its neighbours, so the row cannot clip it. */
+.row:hover {
+  z-index: 2;
 }
 
 .row__header {
@@ -302,8 +423,10 @@ img {
 
 .row__heading {
   margin: 0;
-  font-size: 18px;
+  font-size: clamp(16px, 1.5vw, 22px);
+  font-weight: 700;
   letter-spacing: -0.01em;
+  color: #e5e5e5;
 }
 
 .row__more {
@@ -315,31 +438,105 @@ img {
   color: var(--text);
 }
 
-.row__empty {
-  color: var(--text-muted);
-}
-
 .row__scroller {
   display: grid;
   grid-auto-flow: column;
-  grid-auto-columns: minmax(200px, 1fr);
-  gap: 16px;
+  /* Fixed-width tiles rather than fractions: a row is meant to run off the
+     edge, not redistribute itself to fit. */
+  grid-auto-columns: clamp(160px, 16vw, 250px);
+  gap: 0.4vw;
   overflow-x: auto;
-  padding-bottom: 10px;
+  scroll-behavior: smooth;
   scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  /* Room for the hover scale, which would otherwise be clipped by the scroller. */
+  padding: 24px 0;
+  margin: -24px 0;
+}
+
+.row__scroller::-webkit-scrollbar {
+  display: none;
 }
 
 .row__scroller > * {
   scroll-snap-align: start;
 }
 
+/* Arrows appear on hover, which keeps the shelf clean until it is being used. */
+.row__arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: var(--gutter);
+  min-width: 34px;
+  border: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 20, 20, 0.6);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.row__arrow--start {
+  left: 0;
+}
+
+.row__arrow--end {
+  right: 0;
+}
+
+.row:hover .row__arrow,
+.row__arrow:focus-visible {
+  opacity: 1;
+}
+
+.row__arrow:hover {
+  background: rgba(20, 20, 20, 0.85);
+  font-size: 28px;
+}
+
+@media (hover: none), (max-width: 900px) {
+  /* Nothing to reveal on a touch screen, where the row is simply swiped. */
+  .row__arrow {
+    display: none;
+  }
+}
+
+.row__empty {
+  color: var(--text-muted);
+}
+
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(160px, 16vw, 250px), 1fr));
+  gap: 2vw 0.4vw;
+  padding: 24px 0;
 }
 
 /* ---------- Cards ---------- */
+
+.card {
+  display: block;
+  transition: transform 0.25s ease;
+}
+
+/* Scale, not lift. Growing in place is what reads as a tile coming forward. */
+.card:hover,
+.card:focus-visible {
+  transform: scale(1.09);
+}
+
+.card:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+  border-radius: var(--radius);
+}
 
 .card__art {
   position: relative;
@@ -347,13 +544,12 @@ img {
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-elevated);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: box-shadow 0.25s ease;
 }
 
 .card:hover .card__art,
 .card:focus-visible .card__art {
-  transform: translateY(-3px);
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.75);
 }
 
 .card__art img {
@@ -379,18 +575,27 @@ img {
   right: 8px;
   bottom: 8px;
   padding: 2px 7px;
-  border-radius: 5px;
+  border-radius: 3px;
   background: rgba(0, 0, 0, 0.72);
   font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.card:hover .card__duration,
+.card:focus-visible .card__duration {
+  opacity: 1;
 }
 
 .card__progress {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.22);
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .card__progress-bar {
@@ -404,16 +609,34 @@ img {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 9px;
+  margin-top: 8px;
 }
 
 .card__title {
   margin: 0;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
+  color: #d2d2d2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.card:hover .card__title,
+.card:focus-visible .card__title {
+  color: var(--text);
+}
+
+/* Badges compete with the artwork at rest and are only useful while choosing. */
+.card__meta .badge {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.card:hover .card__meta .badge,
+.card:focus-visible .card__meta .badge {
+  opacity: 1;
 }
 
 /* ---------- Player ---------- */
@@ -688,4 +911,51 @@ img {
 
 .button--ghost:hover {
   color: var(--text);
+}
+
+/* ---------- Narrow screens ---------- */
+
+@media (max-width: 760px) {
+  /* The bar needs two lines here, so overlaying it on the billboard would
+     cover the title. In the flow it cannot, whatever height it takes. */
+  .header {
+    position: sticky;
+    background: var(--bg);
+    padding: 8px var(--gutter);
+    row-gap: 8px;
+  }
+
+  .page {
+    padding-top: 0;
+  }
+
+  .hero {
+    margin-top: 0;
+    padding-top: 24px;
+    min-height: 0;
+  }
+
+  .hero__content {
+    padding-bottom: 8vw;
+  }
+
+  .header__brand {
+    font-size: 21px;
+  }
+
+  .header__search input {
+    width: 100%;
+  }
+
+  .header__nav {
+    order: 3;
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .button--hero,
+  .button--hero-secondary {
+    font-size: 15px;
+    padding: 9px 18px;
+  }
 }

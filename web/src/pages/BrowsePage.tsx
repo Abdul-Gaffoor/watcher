@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Spinner } from '../components/Spinner';
 import { TitleRow } from '../components/TitleRow';
@@ -8,6 +8,7 @@ import { continueWatching } from '../lib/progress';
 
 export function BrowsePage() {
   const { catalog, loading, error, reload, featured, titlesInGenre, byId } = useCatalog();
+  const [synopsisOpen, setSynopsisOpen] = useState(false);
 
   const resumable = useMemo(
     () =>
@@ -52,10 +53,26 @@ export function BrowsePage() {
                 .filter(Boolean)
                 .join(' · ')}
             </p>
-            <p className="hero__description">{featured.description}</p>
-            <Link className="button button--primary" to={`/watch/${featured.id}`}>
-              Play
-            </Link>
+            <p
+              className={
+                synopsisOpen ? 'hero__description' : 'hero__description hero__description--clamped'
+              }
+            >
+              {featured.description}
+            </p>
+            <div className="hero__actions">
+              <Link className="button button--hero" to={`/watch/${featured.id}`}>
+                <span aria-hidden="true">▶</span> Play
+              </Link>
+              <button
+                type="button"
+                className="button button--hero-secondary"
+                aria-expanded={synopsisOpen}
+                onClick={() => setSynopsisOpen((open) => !open)}
+              >
+                <span aria-hidden="true">ⓘ</span> {synopsisOpen ? 'Less info' : 'More info'}
+              </button>
+            </div>
           </div>
         </section>
       )}
