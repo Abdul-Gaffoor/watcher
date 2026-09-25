@@ -77,16 +77,28 @@ export function credentialsFromEnv(env = process.env) {
 }
 
 /**
- * Builds a presigned `GET` URL for one object.
+ * Builds a presigned S3 URL for any single request.
+ *
+ * Generalised beyond GET because the admin path hands the browser URLs for the
+ * whole multipart upload exchange: start, each part, and finish. The Lambda
+ * only ever signs; the bytes go browser to S3 directly, which is the only way
+ * a gigabyte of video can move without a proxy in the middle.
+ *
+ * `extraQuery` carries the S3 sub-resources that select the operation, such as
+ * `uploads` to begin or `partNumber` and `uploadId` for one part. They are
+ * signed along with everything else, so a URL can only do the one thing it
+ * was minted for, to the one key it names.
  *
  * `expiresIn` is capped by AWS at 7 days, and in practice is also capped by the
  * lifetime of the Lambda's temporary credentials — a URL outlives neither.
  */
-export function presignGetObject({
+export function presignS3({
+  method = 'GET',
   bucket,
   key,
   region,
   credentials,
+  extraQuery = {},
   expiresIn = 3600,
   now = new Date(),
   // Overridable so the AWS reference vectors, which use the legacy
@@ -99,6 +111,7 @@ export function presignGetObject({
   const scope = `${dateStamp}/${region}/${SERVICE}/aws4_request`;
 
   const query = {
+    ...extraQuery,
     'X-Amz-Algorithm': ALGORITHM,
     'X-Amz-Credential': `${accessKeyId}/${scope}`,
     'X-Amz-Date': amzDate,
@@ -110,16 +123,17 @@ export function presignGetObject({
   // The canonical query string must be sorted by encoded key, byte-wise.
   const canonicalQuery = Object.keys(query)
     .sort()
-    .map((name) => `${uriEncode(name)}=${uriEncode(query[name])}`)
+    .map((name) => `${uriEncode(name)}=${uriEncode(String(query[name]))}`)
     .join('&');
 
   const canonicalRequest = [
-    'GET',
+    method,
     canonicalUri,
     canonicalQuery,
     `host:${host}\n`,
     'host',
-    // S3 accepts this sentinel in place of a body hash for presigned GETs.
+    // S3 accepts this sentinel in place of a body hash for presigned requests,
+    // which is what lets the browser stream a part it has not hashed.
     'UNSIGNED-PAYLOAD',
   ].join('\n');
 
@@ -129,4 +143,9 @@ export function presignGetObject({
     .digest('hex');
 
   return `https://${host}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
+}
+
+/** The read case, which is most of the traffic and reads better named. */
+export function presignGetObject(options) {
+  return presignS3({ ...options, method: 'GET' });
 }

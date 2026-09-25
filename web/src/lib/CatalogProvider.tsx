@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { fetchCatalog } from './api';
-import type { Catalog, Genre, Title } from './types';
+import type { Catalog, Collection, Title } from './types';
 
 interface CatalogContextValue {
   catalog: Catalog | null;
@@ -16,8 +16,16 @@ interface CatalogContextValue {
   error: string | null;
   reload: () => void;
   byId: (id: string) => Title | undefined;
-  genreById: (id: string) => Genre | undefined;
-  titlesInGenre: (genreId: string) => Title[];
+  collectionById: (id: string) => Collection | undefined;
+  /** Top-level shelves, in declared order. These are the nav. */
+  roots: Collection[];
+  childrenOf: (collectionId: string | null) => Collection[];
+  /** Only the titles filed directly here, not in its descendants. */
+  titlesDirectlyIn: (collectionId: string) => Title[];
+  /** Everything below this point, which is what a shelf actually shows. */
+  titlesBeneath: (collectionId: string) => Title[];
+  /** Root-first ancestry, for breadcrumbs. */
+  pathTo: (collectionId: string) => Collection[];
   search: (query: string) => Title[];
   featured: Title | null;
 }
@@ -53,8 +61,58 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CatalogContextValue>(() => {
     const titles = catalog?.titles ?? [];
+    const collections = catalog?.collections ?? [];
     const titleIndex = new Map(titles.map((title) => [title.id, title]));
-    const genreIndex = new Map((catalog?.genres ?? []).map((genre) => [genre.id, genre]));
+    const collectionIndex = new Map(collections.map((collection) => [collection.id, collection]));
+
+    // Built once per catalog rather than filtered per call, because a shelf
+    // page asks for children and descendants repeatedly while rendering.
+    const childIndex = new Map<string | null, Collection[]>();
+    for (const collection of collections) {
+      const parentId = collection.parentId ?? null;
+      const siblings = childIndex.get(parentId) ?? [];
+      siblings.push(collection);
+      childIndex.set(parentId, siblings);
+    }
+
+    const titlesByCollection = new Map<string, Title[]>();
+    for (const title of titles) {
+      const bucket = titlesByCollection.get(title.collectionId) ?? [];
+      bucket.push(title);
+      titlesByCollection.set(title.collectionId, bucket);
+    }
+
+    const childrenOf = (collectionId: string | null) => childIndex.get(collectionId) ?? [];
+
+    const titlesBeneath = (collectionId: string): Title[] => {
+      const found: Title[] = [];
+      // Iterative, so a catalog that somehow contained a cycle would not take
+      // the whole page down with it.
+      const seen = new Set<string>();
+      const stack = [collectionId];
+      while (stack.length > 0) {
+        const current = stack.pop() as string;
+        if (seen.has(current)) continue;
+        seen.add(current);
+        found.push(...(titlesByCollection.get(current) ?? []));
+        for (const child of childrenOf(current)) stack.push(child.id);
+      }
+      return found;
+    };
+
+    const pathTo = (collectionId: string): Collection[] => {
+      const trail: Collection[] = [];
+      const seen = new Set<string>();
+      let current: string | null = collectionId;
+      while (current !== null && !seen.has(current)) {
+        seen.add(current);
+        const collection = collectionIndex.get(current);
+        if (!collection) break;
+        trail.unshift(collection);
+        current = collection.parentId ?? null;
+      }
+      return trail;
+    };
 
     return {
       catalog,
@@ -62,8 +120,12 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       error,
       reload,
       byId: (id) => titleIndex.get(id),
-      genreById: (id) => genreIndex.get(id),
-      titlesInGenre: (genreId) => titles.filter((title) => title.genreIds.includes(genreId)),
+      collectionById: (id) => collectionIndex.get(id),
+      roots: childrenOf(null),
+      childrenOf,
+      titlesDirectlyIn: (collectionId) => titlesByCollection.get(collectionId) ?? [],
+      titlesBeneath,
+      pathTo,
       search: (query) => {
         const needle = query.trim().toLowerCase();
         if (!needle) return [];

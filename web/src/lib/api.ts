@@ -97,3 +97,30 @@ export async function fetchCatalog(): Promise<Catalog> {
     throw error;
   }
 }
+
+/**
+ * The dashboard's API. Every one of these is refused by the server unless the
+ * session carries the admin role, so hiding the dashboard in the interface is
+ * a courtesy rather than the control.
+ */
+export const adminApi = {
+  catalog: () => request<{ catalog: Catalog }>('/api/admin/catalog'),
+
+  saveCatalog: (catalog: Catalog, baseRevision: number) =>
+    request<{ catalog: Catalog }>('/api/admin/catalog', {
+      method: 'PUT',
+      body: JSON.stringify({ catalog, baseRevision }),
+    }),
+
+  /** Returns presigned URLs; the bytes themselves never come back through here. */
+  signUpload: (payload: Record<string, unknown>) =>
+    request<{
+      key: string;
+      mediaPath: string;
+      url: string;
+      urls: { partNumber: number; url: string }[];
+    }>('/api/admin/uploads', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+};

@@ -64,6 +64,14 @@ export function getConfig() {
       cognitoClientId: process.env.COGNITO_CLIENT_ID || null,
       cognitoRegion: process.env.COGNITO_REGION || process.env.AWS_REGION || null,
       cognitoIssuerLabel: process.env.COGNITO_ISSUER_LABEL || 'Watcher',
+      // Where the dashboard writes. Absent on the dev server, which has no
+      // bucket, so the admin routes report themselves unavailable rather than
+      // failing halfway through a write.
+      mediaBucket: process.env.MEDIA_BUCKET || null,
+      mediaRegion: process.env.MEDIA_REGION || process.env.AWS_REGION || null,
+      // Only the dev server sets this: it stands in for the bucket so the
+      // dashboard can be developed without an AWS account.
+      localCatalogPath: process.env.LOCAL_CATALOG_PATH || null,
       cookieDomain: process.env.COOKIE_DOMAIN || undefined,
       sessionTtlSeconds: seconds('SESSION_TTL_SECONDS', 12 * 60 * 60),
       mediaTtlSeconds: seconds('MEDIA_TTL_SECONDS', 60 * 60),

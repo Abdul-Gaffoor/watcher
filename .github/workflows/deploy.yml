@@ -123,12 +123,21 @@ jobs:
             --cache-control 'no-cache, must-revalidate' \
             --content-type 'text/html; charset=utf-8'
 
-      - name: Publish the catalog
+      # Seeded, not published. The catalog is edited from the dashboard now, so
+      # copying it on every deploy would silently revert whatever an admin did.
+      # It is only written when the library has no catalog at all.
+      - name: Seed the catalog if the library is empty
         run: |
-          aws s3 cp content/catalog.json \
-            "s3://${{ needs.terraform.outputs.media_bucket }}/media/catalog.json" \
-            --cache-control 'public, max-age=60' \
-            --content-type 'application/json; charset=utf-8'
+          set -euo pipefail
+          BUCKET="${{ needs.terraform.outputs.media_bucket }}"
+          if aws s3api head-object --bucket "$BUCKET" --key 'media/catalog.json' >/dev/null 2>&1; then
+            echo "Catalog already exists; leaving it alone."
+          else
+            echo "No catalog yet; seeding from the repository."
+            aws s3 cp content/catalog.json "s3://$BUCKET/media/catalog.json" \
+              --cache-control 'public, max-age=30' \
+              --content-type 'application/json; charset=utf-8'
+          fi
 
       # Artwork is immutable; a re-render gets a new path.
       - name: Publish artwork

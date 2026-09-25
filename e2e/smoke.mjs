@@ -125,14 +125,34 @@ try {
     await page.waitForURL(/\/watch\/the-long-exposure$/, { timeout: 15_000 });
   });
 
-  await step('the catalog renders a hero and one row per genre', async () => {
+  await step('the catalog renders a hero and a shelf per branch', async () => {
     await page.goto(BASE, { waitUntil: 'networkidle' });
     await page.waitForSelector('.hero__title');
+
+    // Sections are the roots; the shelves are what sits one level under them.
+    const sections = await page.$$eval('.shelf__heading', (els) => els.map((el) => el.textContent));
+    for (const section of ['Trading', 'Movies']) {
+      assert.ok(sections.includes(section), `missing section: ${section}`);
+    }
+
     const headings = await page.$$eval('.row__heading', (els) => els.map((el) => el.textContent));
-    for (const genre of ['Harmonic Trading', 'Elliott Waves', 'Smart Money Concepts', 'Cinema']) {
-      assert.ok(headings.includes(genre), `missing row: ${genre}`);
+    for (const branch of ['Harmonic Trading', 'Elliott Wave', 'SMC', 'English']) {
+      assert.ok(headings.includes(branch), `missing shelf: ${branch}`);
     }
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/01-browse.png` });
+  });
+
+  await step('a shelf gathers videos from collections nested below it', async () => {
+    // The SMC videos are two levels down, inside a named mentorship. They must
+    // still appear on the SMC shelf, or nesting would hide the library.
+    const cards = await page.$$eval('.row', (rows) => {
+      const row = rows.find((el) => el.querySelector('.row__heading')?.textContent === 'SMC');
+      return [...(row?.querySelectorAll('.card__title') ?? [])].map((el) => el.textContent);
+    });
+    assert.deepEqual(
+      cards.sort(),
+      ['Market Structure and Liquidity', 'Order Blocks and Fair Value Gaps'],
+    );
   });
 
   await step('artwork loads rather than showing broken images', async () => {
@@ -142,12 +162,25 @@ try {
     assert.equal(broken, 0, `${broken} broken image(s)`);
   });
 
-  await step('genre navigation filters the grid', async () => {
-    await page.click('.header__nav a:has-text("Smart Money Concepts")');
-    await page.waitForURL(/\/genre\/smc$/);
+  await step('navigating the tree reaches the videos at the bottom of it', async () => {
+    // Trading is a root, so it shows its branches rather than videos.
+    await page.click('.header__nav a:has-text("Trading")');
+    await page.waitForURL(/\/c\/trading$/);
+    await page.waitForSelector('.row__heading');
+
+    // Descending to the named mentorship is where the videos themselves live.
+    await page.click('.row__more[href="/c/smc"]');
+    await page.waitForURL(/\/c\/smc$/);
+    await page.click('.row__more[href="/c/gaurdeer-mentorship"]');
+    await page.waitForURL(/\/c\/gaurdeer-mentorship$/);
+
     await page.waitForSelector('.grid .card');
-    const titles = await page.$$eval('.card__title', (els) => els.map((el) => el.textContent));
+    const titles = await page.$$eval('.grid .card__title', (els) => els.map((el) => el.textContent));
     assert.deepEqual(titles.sort(), ['Market Structure and Liquidity', 'Order Blocks and Fair Value Gaps']);
+
+    // The breadcrumb has to offer the way back up, or a deep shelf is a dead end.
+    const crumbs = await page.$$eval('.breadcrumb a', (els) => els.map((el) => el.textContent));
+    assert.deepEqual(crumbs, ['Home', 'Trading', 'SMC']);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/02-genre.png` });
   });
 

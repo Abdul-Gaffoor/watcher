@@ -28,6 +28,40 @@ resource "aws_iam_role" "api" {
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role.json
 }
 
+# What the dashboard needs, and nothing else. The Lambda never handles video
+# itself; it signs URLs, and a presigned URL can never grant more than the role
+# that signed it. So this policy is also the ceiling on what an upload URL
+# could ever reach if one leaked.
+data "aws_iam_policy_document" "api_media_admin" {
+  statement {
+    sid    = "ManageMediaObjects"
+    effect = "Allow"
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts",
+    ]
+    resources = ["${aws_s3_bucket.media.arn}/*"]
+  }
+
+  # Without this, S3 answers a GET for a key that does not exist with 403
+  # rather than 404, so a library with no catalog yet would look like a
+  # permission failure instead of an empty shelf.
+  statement {
+    sid       = "DistinguishMissingFromForbidden"
+    effect    = "Allow"
+    actions   = ["s3:ListBucket", "s3:ListBucketMultipartUploads"]
+    resources = [aws_s3_bucket.media.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "api_media_admin" {
+  name   = "${local.name_prefix}-api-media"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.api_media_admin.json
+}
+
 resource "aws_iam_role_policy_attachment" "api_basic_execution" {
   role       = aws_iam_role.api.name
   policy_arn = "arn:${local.partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
@@ -59,6 +93,9 @@ resource "aws_lambda_function" "api" {
       SESSION_SECRET      = random_password.session_secret.result
       SESSION_TTL_SECONDS = tostring(var.session_ttl_seconds)
       MEDIA_TTL_SECONDS   = tostring(var.media_ttl_seconds)
+      # Where the dashboard reads and writes the catalog, and where uploads land.
+      MEDIA_BUCKET = aws_s3_bucket.media.id
+      MEDIA_REGION = var.aws_region
       }, local.use_cognito ? {
       # Cognito owns the directory, so the roster is not passed at all. The
       # handler refuses to start with both configured, which keeps it

@@ -176,16 +176,20 @@ resource "aws_s3_bucket_policy" "media" {
 # A segment request starts same-origin and is redirected to S3, which makes the
 # final fetch cross-origin. Without this the player can reach the bytes but the
 # browser refuses to hand them over.
+# Needed by two different things, so it is not conditional on the front end.
+# Reading: a segment request starts same-origin and is redirected to S3, which
+# makes the final fetch cross-origin. Writing: the dashboard uploads straight
+# to S3, because video cannot pass through Lambda.
 resource "aws_s3_bucket_cors_configuration" "media" {
-  count = local.use_apigateway ? 1 : 0
-
   bucket = aws_s3_bucket.media.id
 
   cors_rule {
-    allowed_methods = ["GET", "HEAD"]
+    allowed_methods = ["GET", "HEAD", "PUT", "POST", "DELETE"]
     allowed_origins = var.domain_name == null ? ["*"] : ["https://${var.domain_name}"]
     allowed_headers = ["*"]
-    # hls.js reads these off a range response to drive seeking.
+    # ETag is not optional here: finishing a multipart upload means sending
+    # back the tag S3 returned for every part, and the browser cannot read a
+    # response header it has not been allowed to see.
     expose_headers  = ["Content-Length", "Content-Range", "Content-Type", "ETag", "Accept-Ranges"]
     max_age_seconds = 3000
   }

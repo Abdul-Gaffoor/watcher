@@ -6,13 +6,16 @@ pain usually shows up.
 
 ## 1. Content operations
 
-- **Upload pipeline.** Drop an MP4 in a staging bucket, have S3 trigger
-  MediaConvert to produce the HLS ladder, then write the catalog entry
-  automatically. Replaces `transcode-hls.sh` once uploads are frequent.
+- ~~**Upload pipeline.**~~ **Partly done.** The dashboard uploads straight to S3
+  as multipart and writes the catalog entry itself. What is still missing is the
+  transcode: an uploaded file is served as progressive MP4, so seeking works but
+  the bitrate does not adapt. MediaConvert triggered on upload, writing the HLS
+  ladder back and swapping the title's source, is the remaining half.
 - **Thumbnails and sprite sheets** for scrub previews on the progress bar.
-- **Catalog authoring.** Editing JSON by hand stops scaling around a hundred
-  titles; a small admin page writing to DynamoDB and regenerating the static
-  catalog keeps the read path just as fast.
+- ~~**Catalog authoring.**~~ **Done.** The catalog is a tree edited from the
+  dashboard and stored in the media bucket, with a revision so concurrent edits
+  conflict rather than clobber. It is still one document, which is fine into the
+  low thousands of titles; past that it wants splitting per branch.
 
 ## 2. Accounts
 

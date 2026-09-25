@@ -51,9 +51,11 @@ auth_provider = "roster"
 #   node scripts/hash-password.mjs
 users = [
   {
-    username      = "Abdul"
-    name          = "Abdul"
-    roles         = ["viewer"]
+    username = "Abdul"
+    name     = "Abdul"
+    # "admin" is what opens the dashboard. It is checked on the server, in the
+    # session, not merely hidden in the interface.
+    roles         = ["viewer", "admin"]
     password_hash = "scrypt$16384$8$1$QJR67RN7ikhYjGzEL4WAew==$sEhT7xe4ZakJWyGyKb10DTckFVLkKpQE7Ii9QnuxReA="
   },
 ]

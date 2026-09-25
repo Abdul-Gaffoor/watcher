@@ -1,6 +1,12 @@
-export interface Genre {
+/**
+ * A node in the library tree. `parentId` is null at the root, which is all it
+ * takes to express shelves of different depths: Trading > Elliott Wave > a
+ * named course > its classes, alongside Movies > Telugu > the films.
+ */
+export interface Collection {
   id: string;
   name: string;
+  parentId: string | null;
   description?: string;
 }
 
@@ -14,8 +20,9 @@ export interface TitleSources {
 export interface Title {
   id: string;
   title: string;
-  genreIds: string[];
-  description: string;
+  /** The single collection this title is filed under. */
+  collectionId: string;
+  description?: string;
   /** Seconds. Used for the duration badge and resume percentages. */
   durationSec: number;
   year?: number;
@@ -32,8 +39,10 @@ export interface Title {
 
 export interface Catalog {
   version: number;
+  /** Bumped on every save, and what makes a concurrent edit detectable. */
+  revision: number;
   updatedAt: string;
-  genres: Genre[];
+  collections: Collection[];
   titles: Title[];
 }
 

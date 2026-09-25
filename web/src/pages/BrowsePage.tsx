@@ -7,7 +7,8 @@ import { formatDuration } from '../lib/format';
 import { continueWatching } from '../lib/progress';
 
 export function BrowsePage() {
-  const { catalog, loading, error, reload, featured, titlesInGenre, byId } = useCatalog();
+  const { catalog, loading, error, reload, featured, roots, childrenOf, titlesBeneath, titlesDirectlyIn, byId } =
+    useCatalog();
   const [synopsisOpen, setSynopsisOpen] = useState(false);
 
   const resumable = useMemo(
@@ -79,14 +80,31 @@ export function BrowsePage() {
 
       <TitleRow heading="Continue watching" titles={resumable} />
 
-      {catalog.genres.map((genre) => (
-        <TitleRow
-          key={genre.id}
-          heading={genre.name}
-          titles={titlesInGenre(genre.id)}
-          moreHref={`/genre/${genre.id}`}
-        />
-      ))}
+      {/* A shelf per branch rather than per root: "Trading" is a section, and
+          what a viewer scans is "Elliott Wave" and "Harmonic Trading" inside
+          it. Each shelf gathers everything beneath it, however deep. */}
+      {roots.map((root) => {
+        const branches = childrenOf(root.id);
+        const loose = titlesDirectlyIn(root.id);
+        if (branches.length === 0 && loose.length === 0) return null;
+
+        return (
+          <section className="shelf" key={root.id}>
+            <h2 className="shelf__heading">{root.name}</h2>
+            {loose.length > 0 && (
+              <TitleRow heading={root.name} titles={loose} moreHref={`/c/${root.id}`} />
+            )}
+            {branches.map((branch) => (
+              <TitleRow
+                key={branch.id}
+                heading={branch.name}
+                titles={titlesBeneath(branch.id)}
+                moreHref={`/c/${branch.id}`}
+              />
+            ))}
+          </section>
+        );
+      })}
     </main>
   );
 }

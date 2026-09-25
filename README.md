@@ -167,6 +167,52 @@ e2e/          Browser smoke test
 docs/         Architecture notes, security notes, roadmap
 ```
 
+## The library, and how videos get into it
+
+The catalog is a tree. A collection names its parent, or nothing at the root,
+which is all it takes to hold shelves of different depths side by side:
+
+```
+Trading                        Movies
+  Elliott Wave                   Telugu
+    SweeGlu Elliott Wave Course  Hindi
+      the class videos           English
+```
+
+A shelf gathers everything beneath it however deep, so the Elliott Wave row on
+the home page shows the course's classes without anyone having to file them
+twice.
+
+**Uploading is done in the app.** Sign in as an admin and open **Manage**. Pick
+a file, name it, choose where it goes. The browser uploads straight to object
+storage in 16 MB parts, so a dropped connection costs one part rather than the
+whole file, and the catalog is only updated once the video has actually landed.
+Nothing passes through the API, because a request body through Lambda is capped
+in megabytes and a lesson is gigabytes.
+
+The same screen edits the structure: add a collection anywhere, rename it,
+remove an empty one. Changes are saved as one document with a revision, so two
+admins editing at once get a conflict rather than one silently overwriting the
+other.
+
+**Only admins see it.** The role rides in the session and is checked on the
+server for every request the dashboard makes. Hiding the link is a courtesy,
+not the control. Grant it in `deploy-aws/terraform.tfvars`:
+
+```hcl
+users = [
+  { username = "Abdul", name = "Abdul", roles = ["viewer", "admin"] },
+]
+```
+
+Two things worth knowing. Uploaded video is served as progressive MP4 rather
+than transcoded to an adaptive ladder, so seeking works but quality does not
+adapt to a weak connection; `scripts/transcode-hls.sh` still produces HLS if you
+want it for a particular title. And the catalog now lives in the media bucket
+rather than in git, because a dashboard that could not write it would be a
+viewer. The copy in `content/` seeds an empty library and is never republished
+over your edits.
+
 ## Accounts and MFA
 
 Viewer credentials can live in either of two places, chosen by `auth_provider`

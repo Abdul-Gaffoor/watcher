@@ -9,7 +9,7 @@ import { HlsPlayer } from '../player/HlsPlayer';
 
 export function WatchPage() {
   const { titleId = '' } = useParams();
-  const { loading, byId, genreById, titlesInGenre } = useCatalog();
+  const { loading, byId, titlesDirectlyIn, pathTo } = useCatalog();
   const title = byId(titleId);
 
   // Read the resume point once on mount so later saves do not re-seek the video.
@@ -40,7 +40,9 @@ export function WatchPage() {
     );
   }
 
-  const related = titlesInGenre(title.genreIds[0] ?? '').filter((other) => other.id !== title.id);
+  // Siblings in the same collection: for a course, that is the rest of the
+  // classes, which is the most useful thing to offer next.
+  const related = titlesDirectlyIn(title.collectionId).filter((other) => other.id !== title.id);
   const meta = [
     title.instructor,
     title.year,
@@ -57,14 +59,12 @@ export function WatchPage() {
         <p className="watch__meta">{meta.join(' · ')}</p>
         <p className="watch__description">{title.description}</p>
         <p className="watch__genres">
-          {title.genreIds.map((genreId) => {
-            const genre = genreById(genreId);
-            return genre ? (
-              <Link key={genreId} className="chip" to={`/genre/${genreId}`}>
-                {genre.name}
-              </Link>
-            ) : null;
-          })}
+          {/* The whole path, so a viewer can climb back to any level of it. */}
+          {pathTo(title.collectionId).map((collection) => (
+            <Link key={collection.id} className="chip" to={`/c/${collection.id}`}>
+              {collection.name}
+            </Link>
+          ))}
         </p>
       </div>
 

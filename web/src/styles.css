@@ -959,3 +959,180 @@ img {
     padding: 9px 18px;
   }
 }
+
+/* ---------- Library manager ---------- */
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.breadcrumb a::after {
+  content: ' ›';
+  color: #666;
+}
+
+.breadcrumb a:hover {
+  color: var(--text);
+}
+
+.shelf__heading {
+  margin: 3vw 0 -1vw;
+  font-size: clamp(18px, 2vw, 28px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.header__admin {
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.header__admin:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.admin__panel {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #1a1a1a;
+}
+
+.admin__panel h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+
+.admin__form {
+  display: grid;
+  gap: 14px;
+  max-width: 560px;
+}
+
+.admin__form--inline {
+  grid-template-columns: 1fr 1fr auto;
+  align-items: end;
+  max-width: none;
+}
+
+.admin__form select,
+.admin__form input[type='file'] {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+/* A bar as well as a percentage: one says how far, the other says it is alive. */
+.admin__progress {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+}
+
+.admin__progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.admin__tree,
+.admin__titles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.admin__tree li,
+.admin__titles li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid #262626;
+}
+
+.admin__rename {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.admin__rename:hover,
+.admin__rename:focus {
+  border-color: var(--border);
+  background: var(--bg-input);
+}
+
+.admin__title-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin__count {
+  color: var(--text-muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.admin__remove {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin__remove:hover {
+  color: var(--accent);
+}
+
+.admin__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.admin__error {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(229, 9, 20, 0.15);
+  color: #ff9a9a;
+}
+
+.admin__notice {
+  color: #7ee2a8;
+}
+
+@media (max-width: 760px) {
+  .admin__form--inline {
+    grid-template-columns: 1fr;
+  }
+}

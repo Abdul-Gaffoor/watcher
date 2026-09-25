@@ -1,6 +1,7 @@
 import { authenticate, getConfig } from './config.mjs';
 import { createSignedCookies } from './cloudfront.mjs';
 import { signJwt, verifyJwt } from './crypto-utils.mjs';
+import { AdminError, isAdmin, readCatalog, signUpload, writeCatalog } from './admin.mjs';
 import {
   beginLogin,
   describeCognitoError,
@@ -264,6 +265,39 @@ export async function handler(event) {
         cookie(name, '', { maxAge: 0, domain: cookieDomain }),
       );
       return json(200, { ok: true }, cleared);
+    }
+
+    // ------------------------------------------------------------ admin --
+    // Gated here, on the server, by the role in the signed session. The
+    // dashboard hiding its own link is presentation; this is the boundary.
+    if (path === '/api/admin/catalog' || path === '/api/admin/uploads') {
+      const user = currentUser(event);
+      if (!user) return json(401, { error: 'Not signed in.' });
+      if (!isAdmin(user)) {
+        // Deliberately the same answer a viewer gets for anything else they
+        // may not have, so the dashboard's existence is not advertised.
+        return json(404, { error: 'Not found' });
+      }
+
+      const config = getConfig();
+      try {
+        if (method === 'GET' && path === '/api/admin/catalog') {
+          return json(200, { catalog: await readCatalog(config) });
+        }
+        if (method === 'PUT' && path === '/api/admin/catalog') {
+          const { catalog, baseRevision } = parseBody(event);
+          return json(200, { catalog: await writeCatalog(config, { catalog, baseRevision }) });
+        }
+        if (method === 'POST' && path === '/api/admin/uploads') {
+          return json(200, signUpload(config, parseBody(event)));
+        }
+        return json(405, { error: 'Method not allowed' });
+      } catch (error) {
+        if (error instanceof AdminError) {
+          return json(error.status, { error: error.message, ...error.extra });
+        }
+        throw error;
+      }
     }
 
     if (method === 'GET' && path === '/api/health') {

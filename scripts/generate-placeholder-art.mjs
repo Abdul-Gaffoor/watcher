@@ -14,12 +14,17 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const catalog = JSON.parse(await readFile(resolve(root, 'content/catalog.json'), 'utf8'));
 
 /** One stable colour pair per genre so a row reads as a set. */
+// Keyed by collection id, at whatever level is most meaningful. A title takes
+// the nearest one above it, so a new course inherits its category's look.
 const palettes = {
   'harmonic-trading': ['#123a63', '#2b6fa8'],
-  'elliott-waves': ['#1d3b2f', '#3f8f6b'],
+  'elliott-wave': ['#1d3b2f', '#3f8f6b'],
   smc: ['#3a2350', '#7b4bb5'],
-  cinema: ['#43202a', '#a8465f'],
-  documentary: ['#2a2f3d', '#5c6784'],
+  telugu: ['#43202a', '#a8465f'],
+  hindi: ['#3d2a17', '#a8713f'],
+  english: ['#2a2f3d', '#5c6784'],
+  trading: ['#132238', '#2f5d8a'],
+  movies: ['#32202c', '#7d4a63'],
 };
 
 /**
@@ -73,7 +78,23 @@ async function writeIfMissing(path, contents) {
 
 let written = 0;
 for (const title of catalog.titles) {
-  const colors = palettes[title.genreIds[0]] ?? ['#1d2333', '#2b2143'];
+  // Walk up the tree for a palette, so a class video inherits the look of the
+  // section it belongs to rather than falling back to grey.
+  const ancestry = (collectionId) => {
+    const trail = [];
+    const seen = new Set();
+    let current = collectionId;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      trail.push(current);
+      current = catalog.collections.find((entry) => entry.id === current)?.parentId ?? null;
+    }
+    return trail;
+  };
+
+  const colors = ancestry(title.collectionId)
+    .map((id) => palettes[id])
+    .find(Boolean) ?? ['#1d2333', '#2b2143'];
 
   for (const [field, width, height] of [
     ['poster', 640, 360],

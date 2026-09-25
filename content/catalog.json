@@ -1,163 +1,249 @@
 {
-  "version": 1,
-  "updatedAt": "2026-09-15T00:00:00Z",
-  "genres": [
+  "version": 2,
+  "revision": 1,
+  "updatedAt": "2026-09-25T00:00:00Z",
+  "collections": [
+    {
+      "id": "trading",
+      "name": "Trading",
+      "parentId": null,
+      "description": "Courses and mentorships, filed by method."
+    },
+    {
+      "id": "elliott-wave",
+      "name": "Elliott Wave",
+      "parentId": "trading"
+    },
+    {
+      "id": "sweeglu-elliott-wave-course",
+      "name": "SweeGlu Elliott Wave Course",
+      "parentId": "elliott-wave"
+    },
     {
       "id": "harmonic-trading",
       "name": "Harmonic Trading",
-      "description": "Gartley, Bat, Butterfly and Crab patterns — measured moves and Fibonacci ratios."
+      "parentId": "trading"
     },
     {
-      "id": "elliott-waves",
-      "name": "Elliott Waves",
-      "description": "Impulse and corrective structures, degree labelling, and wave-count discipline."
+      "id": "harmonic-trading-mastery",
+      "name": "Harmonic Trading Mastery by Krishna",
+      "parentId": "harmonic-trading"
     },
     {
       "id": "smc",
-      "name": "Smart Money Concepts",
-      "description": "Order blocks, liquidity sweeps, fair value gaps and market structure shifts."
+      "name": "SMC",
+      "parentId": "trading"
     },
     {
-      "id": "cinema",
-      "name": "Cinema",
-      "description": "Feature films and shorts."
+      "id": "gaurdeer-mentorship",
+      "name": "Gaurdeer Mentorship",
+      "parentId": "smc"
     },
     {
-      "id": "documentary",
-      "name": "Documentary",
-      "description": "Long-form non-fiction."
+      "id": "movies",
+      "name": "Movies",
+      "parentId": null,
+      "description": "Features and documentaries, filed by language."
+    },
+    {
+      "id": "telugu",
+      "name": "Telugu",
+      "parentId": "movies"
+    },
+    {
+      "id": "hindi",
+      "name": "Hindi",
+      "parentId": "movies"
+    },
+    {
+      "id": "english",
+      "name": "English",
+      "parentId": "movies"
     }
   ],
   "titles": [
     {
       "id": "harmonic-foundations",
       "title": "Harmonic Foundations",
-      "genreIds": ["harmonic-trading"],
       "description": "Build the ratio toolkit from scratch: retracement versus extension, the XABCD skeleton, and how to validate a pattern before it completes.",
       "durationSec": 2760,
       "year": 2025,
       "instructor": "A. Rahman",
       "level": "beginner",
-      "tags": ["fibonacci", "gartley", "xabcd"],
+      "tags": [
+        "fibonacci",
+        "gartley",
+        "xabcd"
+      ],
       "poster": "/media/titles/harmonic-foundations/poster.svg",
       "backdrop": "/media/titles/harmonic-foundations/backdrop.svg",
-      "sources": { "hls": "/media/titles/harmonic-foundations/hls/master.m3u8" },
-      "featured": true
+      "sources": {
+        "hls": "/media/titles/harmonic-foundations/hls/master.m3u8"
+      },
+      "featured": true,
+      "collectionId": "harmonic-trading-mastery"
     },
     {
       "id": "gartley-in-practice",
       "title": "The Gartley, In Practice",
-      "genreIds": ["harmonic-trading"],
-      "description": "Forty live chart reviews of the 222 pattern, including the failures — what invalidated them and where the stop belonged.",
+      "description": "Forty live chart reviews of the 222 pattern, including the failures \u2014 what invalidated them and where the stop belonged.",
       "durationSec": 3540,
       "year": 2025,
       "instructor": "A. Rahman",
       "level": "intermediate",
-      "tags": ["gartley", "risk"],
+      "tags": [
+        "gartley",
+        "risk"
+      ],
       "poster": "/media/titles/gartley-in-practice/poster.svg",
-      "sources": { "hls": "/media/titles/gartley-in-practice/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/gartley-in-practice/hls/master.m3u8"
+      },
+      "collectionId": "harmonic-trading-mastery"
     },
     {
       "id": "crab-and-butterfly",
       "title": "Crab and Butterfly Extensions",
-      "genreIds": ["harmonic-trading"],
       "description": "The extension patterns that catch exhaustion moves, and why the 1.618 projection is the line that matters.",
       "durationSec": 2280,
       "year": 2026,
       "instructor": "L. Okafor",
       "level": "advanced",
-      "tags": ["crab", "butterfly"],
+      "tags": [
+        "crab",
+        "butterfly"
+      ],
       "poster": "/media/titles/crab-and-butterfly/poster.svg",
-      "sources": { "hls": "/media/titles/crab-and-butterfly/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/crab-and-butterfly/hls/master.m3u8"
+      },
+      "collectionId": "harmonic-trading-mastery"
     },
     {
       "id": "elliott-first-principles",
       "title": "Elliott Wave From First Principles",
-      "genreIds": ["elliott-waves"],
       "description": "The three unbreakable rules, the guidelines that are only guidelines, and how to label a chart you have never seen before.",
       "durationSec": 4020,
       "year": 2025,
-      "instructor": "M. Sørensen",
+      "instructor": "M. S\u00f8rensen",
       "level": "beginner",
-      "tags": ["impulse", "correction", "degree"],
+      "tags": [
+        "impulse",
+        "correction",
+        "degree"
+      ],
       "poster": "/media/titles/elliott-first-principles/poster.svg",
       "backdrop": "/media/titles/elliott-first-principles/backdrop.svg",
-      "sources": { "hls": "/media/titles/elliott-first-principles/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/elliott-first-principles/hls/master.m3u8"
+      },
+      "collectionId": "sweeglu-elliott-wave-course"
     },
     {
       "id": "corrective-structures",
       "title": "Corrective Structures Decoded",
-      "genreIds": ["elliott-waves"],
       "description": "Flats, zigzags, triangles and the combinations that defeat most wave counts. Includes a decision tree for ambiguous corrections.",
       "durationSec": 3300,
       "year": 2026,
-      "instructor": "M. Sørensen",
+      "instructor": "M. S\u00f8rensen",
       "level": "advanced",
-      "tags": ["zigzag", "flat", "triangle"],
+      "tags": [
+        "zigzag",
+        "flat",
+        "triangle"
+      ],
       "poster": "/media/titles/corrective-structures/poster.svg",
-      "sources": { "hls": "/media/titles/corrective-structures/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/corrective-structures/hls/master.m3u8"
+      },
+      "collectionId": "sweeglu-elliott-wave-course"
     },
     {
       "id": "smc-market-structure",
       "title": "Market Structure and Liquidity",
-      "genreIds": ["smc"],
       "description": "Where stops pool, why price reaches for them, and how to read a structure shift without hindsight bias.",
       "durationSec": 2940,
       "year": 2026,
       "instructor": "D. Whitfield",
       "level": "intermediate",
-      "tags": ["liquidity", "bos", "choch"],
+      "tags": [
+        "liquidity",
+        "bos",
+        "choch"
+      ],
       "poster": "/media/titles/smc-market-structure/poster.svg",
       "backdrop": "/media/titles/smc-market-structure/backdrop.svg",
-      "sources": { "hls": "/media/titles/smc-market-structure/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/smc-market-structure/hls/master.m3u8"
+      },
+      "collectionId": "gaurdeer-mentorship"
     },
     {
       "id": "order-blocks-fvg",
       "title": "Order Blocks and Fair Value Gaps",
-      "genreIds": ["smc"],
-      "description": "A precise, testable definition of both — then a session-by-session walkthrough applying them to London and New York opens.",
+      "description": "A precise, testable definition of both \u2014 then a session-by-session walkthrough applying them to London and New York opens.",
       "durationSec": 3180,
       "year": 2026,
       "instructor": "D. Whitfield",
       "level": "intermediate",
-      "tags": ["order-block", "fvg", "sessions"],
+      "tags": [
+        "order-block",
+        "fvg",
+        "sessions"
+      ],
       "poster": "/media/titles/order-blocks-fvg/poster.svg",
-      "sources": { "hls": "/media/titles/order-blocks-fvg/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/order-blocks-fvg/hls/master.m3u8"
+      },
+      "collectionId": "gaurdeer-mentorship"
     },
     {
       "id": "the-long-exposure",
       "title": "The Long Exposure",
-      "genreIds": ["cinema"],
       "description": "A portrait photographer returns to a coastal town she left thirty years ago, and finds the light has not forgiven her.",
       "durationSec": 6720,
       "year": 2024,
       "level": "beginner",
-      "tags": ["drama"],
+      "tags": [
+        "drama"
+      ],
       "poster": "/media/titles/the-long-exposure/poster.svg",
       "backdrop": "/media/titles/the-long-exposure/backdrop.svg",
-      "sources": { "hls": "/media/titles/the-long-exposure/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/the-long-exposure/hls/master.m3u8"
+      },
+      "collectionId": "english"
     },
     {
       "id": "night-shift",
       "title": "Night Shift",
-      "genreIds": ["cinema"],
       "description": "Ninety minutes, one hospital corridor, four people who will not admit what they saw.",
       "durationSec": 5400,
       "year": 2025,
-      "tags": ["thriller"],
+      "tags": [
+        "thriller"
+      ],
       "poster": "/media/titles/night-shift/poster.svg",
-      "sources": { "hls": "/media/titles/night-shift/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/night-shift/hls/master.m3u8"
+      },
+      "collectionId": "english"
     },
     {
       "id": "signal-and-noise",
       "title": "Signal and Noise",
-      "genreIds": ["documentary", "cinema"],
       "description": "How three retail traders, a quant desk and a regulator each describe the same market crash.",
       "durationSec": 4860,
       "year": 2026,
-      "tags": ["markets", "finance"],
+      "tags": [
+        "markets",
+        "finance"
+      ],
       "poster": "/media/titles/signal-and-noise/poster.svg",
-      "sources": { "hls": "/media/titles/signal-and-noise/hls/master.m3u8" }
+      "sources": {
+        "hls": "/media/titles/signal-and-noise/hls/master.m3u8"
+      },
+      "collectionId": "english"
     }
   ]
 }

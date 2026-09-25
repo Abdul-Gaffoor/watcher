@@ -4,7 +4,8 @@ import { Header } from './components/Header';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { CatalogProvider } from './lib/CatalogProvider';
 import { BrowsePage } from './pages/BrowsePage';
-import { GenrePage } from './pages/GenrePage';
+import { AdminPage } from './pages/AdminPage';
+import { CollectionPage } from './pages/CollectionPage';
 import { LoginPage } from './pages/LoginPage';
 import { SearchPage } from './pages/SearchPage';
 import { WatchPage } from './pages/WatchPage';
@@ -27,7 +28,10 @@ export default function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppShell />}>
             <Route index element={<BrowsePage />} />
-            <Route path="genre/:genreId" element={<GenrePage />} />
+            <Route path="c/:collectionId" element={<CollectionPage />} />
+            {/* Kept so links made before the library became a tree still land. */}
+            <Route path="genre/:collectionId" element={<CollectionPage />} />
+            <Route path="admin" element={<AdminPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="watch/:titleId" element={<WatchPage />} />
           </Route>

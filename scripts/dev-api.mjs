@@ -37,12 +37,22 @@ const { privateKey } = generateKeyPairSync('rsa', {
 });
 
 process.env.USERS_JSON = JSON.stringify([
-  { username: DEV_USERNAME, name: 'Demo Viewer', roles: ['viewer'], passwordHash: hashPassword(DEV_PASSWORD) },
+  {
+    username: DEV_USERNAME,
+    name: 'Demo Viewer',
+    // Admin locally, so the dashboard can be worked on. In a deployment the
+    // role comes from terraform.tfvars or a Cognito group.
+    roles: ['viewer', 'admin'],
+    passwordHash: hashPassword(DEV_PASSWORD),
+  },
 ]);
 process.env.SESSION_SECRET = 'local-development-secret-not-for-production';
 process.env.CLOUDFRONT_KEY_PAIR_ID = 'LOCALDEVKEYPAIR';
 process.env.CLOUDFRONT_PRIVATE_KEY = privateKey;
 process.env.MEDIA_RESOURCE = `http://localhost:${port}/media/*`;
+// Stands in for the media bucket so the dashboard's structure editing works
+// against a real file. Uploading still needs object storage.
+process.env.LOCAL_CATALOG_PATH = catalogPath;
 
 const { handler } = await import('../backend/src/index.mjs');
 

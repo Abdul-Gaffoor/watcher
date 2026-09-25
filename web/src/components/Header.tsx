@@ -5,7 +5,7 @@ import { useCatalog } from '../lib/CatalogProvider';
 
 export function Header() {
   const { user, logout } = useAuth();
-  const { catalog } = useCatalog();
+  const { roots } = useCatalog();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
@@ -37,13 +37,13 @@ export function Header() {
         <NavLink to="/" end className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
           Home
         </NavLink>
-        {(catalog?.genres ?? []).map((genre) => (
+        {roots.map((root) => (
           <NavLink
-            key={genre.id}
-            to={`/genre/${genre.id}`}
+            key={root.id}
+            to={`/c/${root.id}`}
             className={({ isActive }) => (isActive ? 'is-active' : undefined)}
           >
-            {genre.name}
+            {root.name}
           </NavLink>
         ))}
       </nav>
@@ -69,6 +69,11 @@ export function Header() {
       </form>
 
       <div className="header__account">
+        {user?.roles?.includes('admin') && (
+          <NavLink className="header__admin" to="/admin">
+            Manage
+          </NavLink>
+        )}
         <span className="header__user" title={user?.username}>
           {user?.name ?? user?.username}
         </span>
