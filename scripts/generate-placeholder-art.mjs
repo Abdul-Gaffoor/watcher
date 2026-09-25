@@ -97,7 +97,9 @@ for (const title of catalog.titles) {
     .find(Boolean) ?? ['#1d2333', '#2b2143'];
 
   for (const [field, width, height] of [
-    ['poster', 640, 360],
+    // Portrait, because the shelves show posters rather than crops of a
+    // landscape still.
+    ['poster', 500, 750],
     ['backdrop', 1600, 720],
   ]) {
     const relative = title[field];

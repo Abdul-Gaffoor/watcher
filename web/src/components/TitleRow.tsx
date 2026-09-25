@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { TitleCard } from './TitleCard';
 import type { Title } from '../lib/types';
@@ -12,6 +12,29 @@ interface TitleRowProps {
 
 export function TitleRow({ heading, titles, moreHref, emptyHint }: TitleRowProps) {
   const scroller = useRef<HTMLDivElement>(null);
+
+  /**
+   * How far along the shelf is, as a fraction. A row that runs off the edge
+   * gives no clue how much is left, and a scrollbar is hidden, so this is the
+   * only thing telling a viewer there is more.
+   */
+  const [scrolled, setScrolled] = useState(0);
+  const measure = useCallback(() => {
+    const element = scroller.current;
+    if (!element) return;
+    const travel = element.scrollWidth - element.clientWidth;
+    setScrolled(travel > 4 ? element.scrollLeft / travel : 0);
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const element = scroller.current;
+    if (!element) return;
+    // Resizing changes how much overflows, so the indicator is remeasured too.
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [measure, titles.length]);
 
   /**
    * Pages by just under a full width, so one tile stays on screen as an anchor
@@ -47,7 +70,7 @@ export function TitleRow({ heading, titles, moreHref, emptyHint }: TitleRowProps
           >
             <span aria-hidden="true">‹</span>
           </button>
-          <div className="row__scroller" ref={scroller}>
+          <div className="row__scroller" ref={scroller} onScroll={measure}>
             {titles.map((title) => (
               <TitleCard key={title.id} title={title} />
             ))}
@@ -60,6 +83,9 @@ export function TitleRow({ heading, titles, moreHref, emptyHint }: TitleRowProps
           >
             <span aria-hidden="true">›</span>
           </button>
+          <span className="row__track" aria-hidden="true">
+            <span className="row__track-thumb" style={{ left: `${scrolled * 60}%` }} />
+          </span>
         </>
       )}
     </section>

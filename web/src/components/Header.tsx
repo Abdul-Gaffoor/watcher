@@ -2,7 +2,15 @@ import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useCatalog } from '../lib/CatalogProvider';
+import { COLLECTION_ICONS, HomeIcon, SearchIcon, SettingsIcon, SignOutIcon, SlidersIcon } from './icons';
 
+/**
+ * A rail rather than a bar, and a search that floats over the artwork.
+ *
+ * The rail is icons, so every destination also carries a visually hidden label:
+ * it is what a screen reader announces, what the tooltip repeats, and what
+ * keeps the destinations findable by name rather than by shape.
+ */
 export function Header() {
   const { user, logout } = useAuth();
   const { roots } = useCatalog();
@@ -13,74 +21,82 @@ export function Header() {
   // Keep the box in step with the URL when the viewer navigates back or forward.
   useEffect(() => setQuery(searchParams.get('q') ?? ''), [searchParams]);
 
-  /**
-   * The bar is transparent over the billboard and only takes a background once
-   * there is content scrolled behind it. Passive, because this fires often and
-   * never prevents the scroll.
-   */
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 24);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  const railItem = ({ isActive }: { isActive: boolean }) =>
+    isActive ? 'rail__item is-active' : 'rail__item';
 
   return (
-    <header className={scrolled ? 'header header--scrolled' : 'header'}>
-      <Link className="header__brand" to="/">
-        <span className="header__mark" aria-hidden="true" />
-        Watcher
-      </Link>
+    <>
+      <aside className="rail">
+        <Link className="rail__mark" to="/" aria-label="Watcher home">
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+          <span aria-hidden="true" />
+        </Link>
 
-      <nav className="header__nav" aria-label="Genres">
-        <NavLink to="/" end className={({ isActive }) => (isActive ? 'is-active' : undefined)}>
-          Home
-        </NavLink>
-        {roots.map((root) => (
-          <NavLink
-            key={root.id}
-            to={`/c/${root.id}`}
-            className={({ isActive }) => (isActive ? 'is-active' : undefined)}
-          >
-            {root.name}
+        <nav className="header__nav rail__nav" aria-label="Library">
+          <NavLink to="/" end className={railItem} title="Home">
+            <HomeIcon />
+            <span className="visually-hidden">Home</span>
           </NavLink>
-        ))}
-      </nav>
 
+          {roots.map((root, index) => {
+            const CollectionIcon = COLLECTION_ICONS[index % COLLECTION_ICONS.length];
+            return (
+              <NavLink key={root.id} to={`/c/${root.id}`} className={railItem} title={root.name}>
+                <CollectionIcon />
+                <span className="visually-hidden">{root.name}</span>
+              </NavLink>
+            );
+          })}
+
+          {user?.roles?.includes('admin') && (
+            <NavLink to="/admin" className={`${railItem({ isActive: false })} header__admin`} title="Manage library">
+              <SettingsIcon />
+              <span className="visually-hidden">Manage library</span>
+            </NavLink>
+          )}
+        </nav>
+
+        <button
+          type="button"
+          className="rail__item rail__item--quiet"
+          onClick={() => void logout()}
+          title={`Sign out${user?.name ? ` (${user.name})` : ''}`}
+        >
+          <SignOutIcon />
+          <span className="visually-hidden">Sign out</span>
+        </button>
+      </aside>
+
+      {/* Floating rather than docked, so the artwork runs to the top of the
+          window and the search sits on it like a control, not a chrome bar. */}
       <form
-        className="header__search"
+        className="searchbar"
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
           navigate(query.trim() ? `/search?q=${encodeURIComponent(query.trim())}` : '/search');
         }}
       >
+        <span className="searchbar__icon" aria-hidden="true">
+          <SearchIcon />
+        </span>
         <label className="visually-hidden" htmlFor="site-search">
           Search titles
         </label>
         <input
           id="site-search"
           type="search"
-          placeholder="Search"
+          placeholder="Search for a title"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
-      </form>
-
-      <div className="header__account">
-        {user?.roles?.includes('admin') && (
-          <NavLink className="header__admin" to="/admin">
-            Manage
-          </NavLink>
-        )}
-        <span className="header__user" title={user?.username}>
-          {user?.name ?? user?.username}
-        </span>
-        <button type="button" className="button button--ghost" onClick={() => void logout()}>
-          Sign out
+        <button className="searchbar__submit" type="submit" title="Search">
+          <SlidersIcon />
+          <span className="visually-hidden">Search</span>
         </button>
-      </div>
-    </header>
+      </form>
+    </>
   );
 }

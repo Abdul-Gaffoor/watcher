@@ -5,11 +5,14 @@ import { TitleRow } from '../components/TitleRow';
 import { useCatalog } from '../lib/CatalogProvider';
 import { formatDuration } from '../lib/format';
 import { continueWatching } from '../lib/progress';
+import { isSaved, savedIds, toggleSaved } from '../lib/watchlist';
+import { BookmarkIcon } from '../components/icons';
 
 export function BrowsePage() {
   const { catalog, loading, error, reload, featured, roots, childrenOf, titlesBeneath, titlesDirectlyIn, byId } =
     useCatalog();
   const [synopsisOpen, setSynopsisOpen] = useState(false);
+  const [saved, setSaved] = useState<string[]>(() => savedIds());
 
   const resumable = useMemo(
     () =>
@@ -17,6 +20,11 @@ export function BrowsePage() {
         .map(({ titleId }) => byId(titleId))
         .filter((title): title is NonNullable<typeof title> => Boolean(title)),
     [byId],
+  );
+
+  const savedTitles = useMemo(
+    () => saved.map((id) => byId(id)).filter((title): title is NonNullable<typeof title> => Boolean(title)),
+    [saved, byId],
   );
 
   if (loading) {
@@ -41,18 +49,28 @@ export function BrowsePage() {
   return (
     <main className="page">
       {featured && (
-        <section
-          className="hero"
-          style={featured.backdrop ? { backgroundImage: `url(${featured.backdrop})` } : undefined}
-        >
+        <section className="hero">
+          {/* The artwork is a panel anchored right and faded out to the left,
+              rather than a background behind everything. That is what lets the
+              subject bleed off the edge while the text keeps a flat, readable
+              field to sit on. */}
+          {featured.backdrop && (
+            <div
+              className="hero__art"
+              style={{ backgroundImage: `url(${featured.backdrop})` }}
+              aria-hidden="true"
+            />
+          )}
           <div className="hero__scrim" />
           <div className="hero__content">
-            <p className="hero__eyebrow">Featured</p>
+            <p className="hero__meta hero__meta--top">
+              {[featured.year, featured.level, formatDuration(featured.durationSec)]
+                .filter(Boolean)
+                .join('   ·   ')}
+            </p>
             <h1 className="hero__title">{featured.title}</h1>
             <p className="hero__meta">
-              {[featured.instructor, featured.year, formatDuration(featured.durationSec)]
-                .filter(Boolean)
-                .join(' · ')}
+              {[featured.instructor, ...(featured.tags ?? []).slice(0, 2)].filter(Boolean).join(' · ')}
             </p>
             <p
               className={
@@ -63,7 +81,7 @@ export function BrowsePage() {
             </p>
             <div className="hero__actions">
               <Link className="button button--hero" to={`/watch/${featured.id}`}>
-                <span aria-hidden="true">▶</span> Play
+                <span aria-hidden="true">▶</span> Watch now
               </Link>
               <button
                 type="button"
@@ -71,14 +89,35 @@ export function BrowsePage() {
                 aria-expanded={synopsisOpen}
                 onClick={() => setSynopsisOpen((open) => !open)}
               >
-                <span aria-hidden="true">ⓘ</span> {synopsisOpen ? 'Less info' : 'More info'}
+                {synopsisOpen ? 'Less' : 'Details'}
               </button>
             </div>
+          </div>
+
+          {/* One action, not three. A heart, a bookmark and a plus would be
+              three controls for one idea, and two of them would do nothing. */}
+          <div className="hero__aside">
+            <button
+              type="button"
+              className={isSaved(featured.id) ? 'circle-button is-on' : 'circle-button'}
+              aria-pressed={isSaved(featured.id)}
+              onClick={() => {
+                toggleSaved(featured.id);
+                setSaved(savedIds());
+              }}
+              title={isSaved(featured.id) ? 'Remove from your list' : 'Save to your list'}
+            >
+              <BookmarkIcon filled={isSaved(featured.id)} />
+              <span className="visually-hidden">
+                {isSaved(featured.id) ? 'Remove from your list' : 'Save to your list'}
+              </span>
+            </button>
           </div>
         </section>
       )}
 
       <TitleRow heading="Continue watching" titles={resumable} />
+      <TitleRow heading="My list" titles={savedTitles} />
 
       {/* A shelf per branch rather than per root: "Trading" is a section, and
           what a viewer scans is "Elliott Wave" and "Harmonic Trading" inside
