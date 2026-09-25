@@ -207,6 +207,14 @@ jobs:
             -X POST -H 'content-type: application/json' \
             --data '{"username":"nobody","password":"wrong"}'
 
+          # QR pairing. Starting one needs no session and must reach DynamoDB,
+          # so a 200 here proves the table and its IAM policy are both live.
+          check "device pairing"   200 "$BASE/api/device/start" -X POST
+          # Approving one does need a session, and signed out must not.
+          check "approval is gated" 401 "$BASE/api/device/decide" \
+            -X POST -H 'content-type: application/json' \
+            --data '{"userCode":"BCDFGHJK","approve":true}'
+
           if [ "$failures" -ne 0 ]; then
             echo "$failures smoke check(s) failed against $BASE"
             exit 1

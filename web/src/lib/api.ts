@@ -1,4 +1,11 @@
-import type { Catalog, LoginOutcome, Session } from './types';
+import type {
+  Catalog,
+  DevicePairing,
+  DevicePollOutcome,
+  LoginOutcome,
+  PendingDevice,
+  Session,
+} from './types';
 
 /**
  * Everything is same-origin in production (one CloudFront distribution fronts
@@ -73,6 +80,32 @@ export const api = {
 
   /** Re-issues the CloudFront signed cookies without re-entering credentials. */
   refreshMediaAccess: () => request<Session>('/api/refresh', { method: 'POST' }),
+};
+
+/**
+ * Signing a television in by scanning its code with a phone.
+ *
+ * `start` and `poll` are called by the device being signed in, which has no
+ * session yet. `pending` and `decide` are called by the phone, which has one,
+ * and it is that phone's identity the device ends up with.
+ */
+export const deviceApi = {
+  start: () => request<DevicePairing>('/api/device/start', { method: 'POST' }),
+
+  poll: (userCode: string, deviceCode: string) =>
+    request<DevicePollOutcome>('/api/device/poll', {
+      method: 'POST',
+      body: JSON.stringify({ userCode, deviceCode }),
+    }),
+
+  pending: (code: string) =>
+    request<PendingDevice>(`/api/device/pending?code=${encodeURIComponent(code)}`),
+
+  decide: (userCode: string, approve: boolean) =>
+    request<{ status: 'approved' | 'denied' }>('/api/device/decide', {
+      method: 'POST',
+      body: JSON.stringify({ userCode, approve }),
+    }),
 };
 
 /**

@@ -294,6 +294,100 @@ try {
     assert.ok(overflow <= 1, `horizontal overflow of ${overflow}px`);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/04-mobile.png` });
   });
+  // --------------------------------------------------- pairing a device --
+  // Two contexts, because the whole point is that two devices are involved:
+  // one that shows a code and never sees a password, and one that is already
+  // trusted and says yes.
+
+  await step('a device is signed in by a phone approving its code', async () => {
+    const tv = await browser.newContext({ viewport: { width: 1280, height: 720 } });
+    const phone = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    try {
+      const tvPage = await tv.newPage();
+      await tvPage.goto(`${BASE}/pair`, { waitUntil: 'networkidle' });
+
+      const displayed = await tvPage.textContent('.pair__code');
+      assert.match(displayed.trim(), /^[A-Z0-9]{4}-[A-Z0-9]{4}$/, `unexpected code ${displayed}`);
+      // A QR is actually rendered, not just a placeholder box.
+      assert.ok(await tvPage.$('svg.qr path'), 'no QR drawn');
+
+      const code = displayed.replace(/[^A-Z0-9]/g, '');
+
+      // The phone signs in the ordinary way, then follows the scanned link.
+      const phonePage = await phone.newPage();
+      await phonePage.goto(`${BASE}/link?code=${code}`, { waitUntil: 'networkidle' });
+      await phonePage.waitForURL(/\/login$/);
+      await phonePage.fill('input[name="username"]', USERNAME);
+      await phonePage.fill('input[name="password"]', PASSWORD);
+      await phonePage.click('button[type="submit"]');
+
+      // It comes back to the approval screen with the code intact.
+      await phonePage.waitForSelector('.pair__facts', { timeout: 15_000 });
+      const facts = await phonePage.textContent('.pair__facts');
+      assert.ok(facts.includes(displayed.trim()), 'the approval screen should name the code');
+      if (shotsDir) await phonePage.screenshot({ path: `${shotsDir}/06-approve.png` });
+
+      await phonePage.click('button:has-text("Approve")');
+      await phonePage.waitForSelector('text=That device is signed in', { timeout: 15_000 });
+
+      // And the television lets itself in, without a password ever being typed
+      // on it.
+      await tvPage.waitForSelector('.hero__title', { timeout: 20_000 });
+      assert.match(tvPage.url(), new RegExp(`^${BASE}/?$`));
+    } finally {
+      await tv.close();
+      await phone.close();
+    }
+  });
+
+  await step('a pairing code works exactly once', async () => {
+    const tv = await browser.newContext();
+    const phone = await browser.newContext();
+    try {
+      const tvPage = await tv.newPage();
+      await tvPage.goto(`${BASE}/pair`, { waitUntil: 'networkidle' });
+      const code = (await tvPage.textContent('.pair__code')).replace(/[^A-Z0-9]/g, '');
+
+      const phonePage = await phone.newPage();
+      await phonePage.goto(`${BASE}/link?code=${code}`, { waitUntil: 'networkidle' });
+      await phonePage.waitForURL(/\/login$/);
+      await phonePage.fill('input[name="username"]', USERNAME);
+      await phonePage.fill('input[name="password"]', PASSWORD);
+      await phonePage.click('button[type="submit"]');
+      await phonePage.waitForSelector('.pair__facts', { timeout: 15_000 });
+      await phonePage.click('button:has-text("Approve")');
+      await phonePage.waitForSelector('text=That device is signed in', { timeout: 15_000 });
+
+      // The device collects it, which consumes the pairing.
+      await tvPage.waitForSelector('.hero__title', { timeout: 20_000 });
+
+      // Re-approving the same code must now fail rather than mint a second
+      // session from one approval.
+      await phonePage.goto(`${BASE}/link?code=${code}`, { waitUntil: 'networkidle' });
+      await phonePage.waitForSelector('text=That code is not waiting', { timeout: 15_000 });
+    } finally {
+      await tv.close();
+      await phone.close();
+    }
+  });
+
+  await step('an unapproved code leaves the device signed out', async () => {
+    const tv = await browser.newContext();
+    try {
+      const tvPage = await tv.newPage();
+      await tvPage.goto(`${BASE}/pair`, { waitUntil: 'networkidle' });
+      await tvPage.waitForSelector('.pair__code');
+
+      // Long enough for several polls to come back pending.
+      await tvPage.waitForTimeout(5000);
+      assert.ok(await tvPage.$('.pair__code'), 'the device should still be waiting');
+      assert.equal(await tvPage.$('.hero__title'), null, 'nothing should have been granted');
+      if (shotsDir) await tvPage.screenshot({ path: `${shotsDir}/05-pair.png` });
+    } finally {
+      await tv.close();
+    }
+  });
+
 } finally {
   await browser?.close();
   await cleanup();

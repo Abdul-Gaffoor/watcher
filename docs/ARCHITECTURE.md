@@ -53,6 +53,39 @@ segment is a Lambda invocation plus an S3 read in one region, for every viewer,
 every time. It is a way to be live, not a way to serve video well, and
 `edge = "cloudfront"` is a one-line change back once the account is verified.
 
+## Pairing a device
+
+RFC 8628 (the OAuth device grant) in miniature, for screens where typing a
+password is awkward or public.
+
+```
+television                      phone (already signed in)
+  POST /api/device/start
+    └─▶ userCode  NTWS-D5XN      shown on screen, and in the QR
+        deviceCode  32 bytes     kept; never displayed
+                                  GET  /api/device/pending?code=NTWS-D5XN
+                                    └─▶ "Chrome on a TV, from 203.0.113.7"
+                                  POST /api/device/decide  { approve: true }
+  POST /api/device/poll
+    { userCode, deviceCode } ───▶ watcher_session, as the approver
+```
+
+The split between the two codes is the security. The short one is public to
+anyone who can see the screen; the long one is what the poll must present, so
+an onlooker who reads the code off a television cannot collect the session that
+the approval produces. Only `sha256(deviceCode)` is stored, so a dump of the
+table cannot be replayed into a pending sign-in.
+
+A pairing lives ten minutes and is deleted the moment it is collected, so one
+approval is one session. Approval is a conditional write against `status =
+pending`, which is what makes "approve twice" and "approve after collection"
+impossible rather than merely unlikely. Unknown, used and expired codes all get
+the same answer, so the endpoint is not an oracle for which codes are live.
+
+Pairings wait in a DynamoDB table with a TTL attribute. DynamoDB sweeps
+expired rows on its own schedule and can be hours late, so every read compares
+the timestamp itself; the TTL only keeps the table from growing.
+
 ## Access control
 
 ```

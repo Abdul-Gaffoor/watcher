@@ -69,6 +69,29 @@ data "aws_iam_policy_document" "api_roster" {
   }
 }
 
+# The four operations the pairing flow uses, on the one table. No Scan and no
+# Query: nothing here ever needs to see a pairing it was not handed the code
+# for, so the role cannot enumerate them either.
+data "aws_iam_policy_document" "api_devices" {
+  statement {
+    sid    = "ManageDevicePairings"
+    effect = "Allow"
+    actions = [
+      "dynamodb:PutItem",
+      "dynamodb:GetItem",
+      "dynamodb:UpdateItem",
+      "dynamodb:DeleteItem",
+    ]
+    resources = [aws_dynamodb_table.devices.arn]
+  }
+}
+
+resource "aws_iam_role_policy" "api_devices" {
+  name   = "${local.name_prefix}-api-devices"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.api_devices.json
+}
+
 resource "aws_iam_role_policy" "api_roster" {
   count = local.use_cognito ? 0 : 1
 
@@ -117,6 +140,10 @@ resource "aws_lambda_function" "api" {
       # Where the dashboard reads and writes the catalog, and where uploads land.
       MEDIA_BUCKET = aws_s3_bucket.media.id
       MEDIA_REGION = var.aws_region
+      # Where a QR pairing waits for the phone to approve it.
+      DEVICES_TABLE           = aws_dynamodb_table.devices.name
+      DEVICES_REGION          = var.aws_region
+      DEVICE_CODE_TTL_SECONDS = tostring(var.device_code_ttl_seconds)
       }, local.use_cognito ? {
       # Cognito owns the directory, so the roster is not passed at all. The
       # handler refuses to start with both configured, which keeps it

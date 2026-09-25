@@ -6,6 +6,8 @@ import { CatalogProvider } from './lib/CatalogProvider';
 import { BrowsePage } from './pages/BrowsePage';
 import { AdminPage } from './pages/AdminPage';
 import { CollectionPage } from './pages/CollectionPage';
+import { DevicePairPage } from './pages/DevicePairPage';
+import { LinkDevicePage } from './pages/LinkDevicePage';
 import { LoginPage } from './pages/LoginPage';
 import { SearchPage } from './pages/SearchPage';
 import { WatchPage } from './pages/WatchPage';
@@ -25,7 +27,13 @@ export default function App() {
     <AuthProvider>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        {/* The device being signed in. No session yet, by definition. */}
+        <Route path="/pair" element={<DevicePairPage />} />
         <Route element={<ProtectedRoute />}>
+          {/* The approving phone. Guarded, and outside the shell: it needs an
+              identity but not the catalog, and a viewer who is not signed in
+              is sent to log in and returns here with the code intact. */}
+          <Route path="link" element={<LinkDevicePage />} />
           <Route element={<AppShell />}>
             <Route index element={<BrowsePage />} />
             <Route path="c/:collectionId" element={<CollectionPage />} />

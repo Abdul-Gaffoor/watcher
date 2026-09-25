@@ -27,6 +27,16 @@ Terraform stack. See [docs/ROADMAP.md](docs/ROADMAP.md) for what comes next.
 Everything is behind **one distribution and one origin**, so there is no CORS
 anywhere and cookies just work.
 
+**Signing in a television.** `/pair` on the device shows a QR and an eight-character
+code; scanning it with a phone that is already signed in opens `/link`, which
+names the device and asks. Approving hands the device a session with the
+approver's roles. The password is never typed on the television and never
+travels to it. Two codes do the work: the short one on screen, which anyone in
+the room can read, and a 256-bit device code the device keeps, which the poll
+must present — so seeing the screen is not enough to collect the session.
+Pairings live ten minutes, work once, and only a hash of the device code is
+stored. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 **Access control.** `POST /api/login` checks the password (scrypt) and returns
 two things: an HttpOnly JWT session cookie, and a set of **CloudFront signed
 cookies** scoped by a custom policy to `/media/*`. CloudFront validates those

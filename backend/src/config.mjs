@@ -69,6 +69,13 @@ export function getConfig() {
       // failing halfway through a write.
       mediaBucket: process.env.MEDIA_BUCKET || null,
       mediaRegion: process.env.MEDIA_REGION || process.env.AWS_REGION || null,
+      // Where QR pairings wait between the device asking and the phone
+      // approving. Absent on the dev server, which keeps them in memory —
+      // correct there because it is one process, and wrong anywhere Lambda
+      // runs more than one container.
+      devicesTable: process.env.DEVICES_TABLE || null,
+      devicesRegion: process.env.DEVICES_REGION || process.env.AWS_REGION || null,
+      deviceCodeTtlSeconds: seconds('DEVICE_CODE_TTL_SECONDS', 10 * 60),
       // Only the dev server sets this: it stands in for the bucket so the
       // dashboard can be developed without an AWS account.
       localCatalogPath: process.env.LOCAL_CATALOG_PATH || null,

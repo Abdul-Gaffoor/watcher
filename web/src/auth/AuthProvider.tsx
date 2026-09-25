@@ -25,6 +25,12 @@ interface AuthContextValue {
   setNewPassword: (challengeToken: string, password: string) => Promise<LoginOutcome>;
   confirmMfaSetup: (challengeToken: string, code: string) => Promise<LoginOutcome>;
   submitMfaCode: (challengeToken: string, code: string) => Promise<LoginOutcome>;
+  /**
+   * Adopts a session this tab did not sign in for. The pairing poll already
+   * carries the cookies back; this is what tells the rest of the app, and what
+   * starts the media-cookie refresh that every other route depends on.
+   */
+  adoptSession: (session: Session) => void;
   logout: () => Promise<void>;
 }
 
@@ -128,6 +134,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [settle],
   );
 
+  const adoptSession = useCallback((session: Session) => adopt(session), [adopt]);
+
   const logout = useCallback(async () => {
     clearTimer();
     try {
@@ -139,8 +147,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearTimer]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, setNewPassword, confirmMfaSetup, submitMfaCode, logout }),
-    [status, user, login, setNewPassword, confirmMfaSetup, submitMfaCode, logout],
+    () => ({
+      status,
+      user,
+      login,
+      setNewPassword,
+      confirmMfaSetup,
+      submitMfaCode,
+      adoptSession,
+      logout,
+    }),
+    [status, user, login, setNewPassword, confirmMfaSetup, submitMfaCode, adoptSession, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -76,3 +76,30 @@ export type LoginOutcome =
     }
   /** Enrolled, and owes a code. */
   | { status: 'mfa_required'; challengeToken: string };
+
+/** What a device gets when it opens a pairing. */
+export interface DevicePairing {
+  /** Eight characters, unformatted. What the poll and the link carry. */
+  userCode: string;
+  /** The same code with a dash, which is what a person reads. */
+  displayCode: string;
+  /** The device's secret. Never displayed, never in the QR. */
+  deviceCode: string;
+  expiresInSeconds: number;
+  intervalSeconds: number;
+}
+
+export type DevicePollOutcome =
+  | { status: 'pending'; intervalSeconds: number }
+  | { status: 'expired' }
+  | { status: 'denied' }
+  | ({ status: 'approved' } & Session);
+
+/** What the approving phone is shown before it decides. */
+export interface PendingDevice {
+  displayCode: string;
+  device: string;
+  ip: string;
+  requestedAt: string;
+  expiresAt: string;
+}

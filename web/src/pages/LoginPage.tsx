@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { Spinner } from '../components/Spinner';
 import type { LoginOutcome } from '../lib/types';
@@ -241,6 +241,12 @@ export function LoginPage() {
       <button className="button button--primary" type="submit" disabled={submitting}>
         {submitting ? 'Signing in…' : 'Sign in'}
       </button>
+
+      {/* The way in for a television, or any screen you would rather not type
+          a password on in front of other people. */}
+      <Link className="login__alt" to="/pair">
+        Sign in with your phone instead
+      </Link>
 
       <p className="login__note">Access is invite-only. Contact your administrator for credentials.</p>
     </>,

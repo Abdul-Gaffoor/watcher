@@ -3,6 +3,14 @@ import { createSignedCookies } from './cloudfront.mjs';
 import { signJwt, verifyJwt } from './crypto-utils.mjs';
 import { AdminError, isAdmin, readCatalog, signUpload, writeCatalog } from './admin.mjs';
 import {
+  DeviceError,
+  decidePairing,
+  describePairing,
+  normaliseUserCode,
+  pollPairing,
+  startPairing,
+} from './devices.mjs';
+import {
   beginLogin,
   describeCognitoError,
   readChallengeToken,
@@ -60,6 +68,21 @@ function cookie(name, value, { maxAge, domain }) {
   if (typeof maxAge === 'number') parts.push(`Max-Age=${maxAge}`);
   if (domain) parts.push(`Domain=${domain}`);
   return parts.join('; ');
+}
+
+/**
+ * Read from the raw query string rather than the parsed map. Both are present
+ * in a payload v2 event, but only this one is unambiguous about repeats and
+ * encoding, and it keeps the dev server on the identical code path.
+ */
+function queryOf(event, name) {
+  return new URLSearchParams(event.rawQueryString ?? '').get(name) ?? '';
+}
+
+function headerOf(event, name) {
+  const headers = event.headers ?? {};
+  // API Gateway lowercases header names; a Function URL does not always.
+  return headers[name] ?? headers[name.toLowerCase()] ?? '';
 }
 
 function readCookies(event) {
@@ -296,6 +319,76 @@ export async function handler(event) {
         if (error instanceof AdminError) {
           return json(error.status, { error: error.message, ...error.extra });
         }
+        throw error;
+      }
+    }
+
+    // ------------------------------------------------- pairing a device --
+    // Signing in a television by scanning its code with an already-trusted
+    // phone. start and poll are unauthenticated by necessity: they are what a
+    // device calls before anyone has proved anything, and an unapproved
+    // pairing is worth nothing. The two that grant something require a
+    // session, and it is that session's identity the device inherits.
+    if (path.startsWith('/api/device/')) {
+      const config = getConfig();
+      const sourceIp = event.requestContext?.http?.sourceIp ?? 'unknown';
+
+      try {
+        if (method === 'POST' && path === '/api/device/start') {
+          if (tooManyAttempts(`device-start:${sourceIp}`)) {
+            return json(429, { error: 'Too many pairing attempts. Try again later.' });
+          }
+          // Counted on every call rather than on failure: nothing here can
+          // fail, so unmetered it would be a free way to fill the table.
+          recordFailure(`device-start:${sourceIp}`);
+
+          const started = await startPairing(config, {
+            userAgent: headerOf(event, 'user-agent'),
+            sourceIp,
+          });
+
+          // The device code never leaves in a form anyone but this device
+          // sees, and the QR carries only the short code.
+          return json(200, started);
+        }
+
+        if (method === 'POST' && path === '/api/device/poll') {
+          const body = parseBody(event);
+          const outcome = await pollPairing(config, {
+            userCode: normaliseUserCode(body.userCode),
+            deviceCode: String(body.deviceCode ?? ''),
+          });
+
+          if (outcome.status !== 'approved') return json(200, outcome);
+
+          // The device is signed in as whoever approved it, with their roles.
+          const session = issueSession(outcome.user);
+          return json(200, { status: 'approved', ...session.body }, session.cookies);
+        }
+
+        // Both of these speak for a signed-in viewer, so both need one.
+        const user = currentUser(event);
+        if (!user) return json(401, { error: 'Not signed in.' });
+
+        if (method === 'GET' && path === '/api/device/pending') {
+          return json(200, await describePairing(config, normaliseUserCode(queryOf(event, 'code'))));
+        }
+
+        if (method === 'POST' && path === '/api/device/decide') {
+          const body = parseBody(event);
+          return json(
+            200,
+            await decidePairing(config, {
+              userCode: normaliseUserCode(body.userCode),
+              approve: body.approve === true,
+              user,
+            }),
+          );
+        }
+
+        return json(404, { error: 'Not found' });
+      } catch (error) {
+        if (error instanceof DeviceError) return json(error.status, { error: error.message });
         throw error;
       }
     }

@@ -196,6 +196,21 @@ variable "users_secret_recovery_days" {
   }
 }
 
+variable "device_code_ttl_seconds" {
+  type        = number
+  default     = 600
+  description = <<-DESC
+    How long a QR pairing code stays valid. Long enough to walk across the room
+    and unlock a phone, short enough that a code left on a television screen
+    stops meaning anything before anybody else sits down in front of it.
+  DESC
+
+  validation {
+    condition     = var.device_code_ttl_seconds >= 60 && var.device_code_ttl_seconds <= 1800
+    error_message = "Must be between 60 and 1800 seconds."
+  }
+}
+
 variable "roster_ttl_seconds" {
   type        = number
   default     = 60
