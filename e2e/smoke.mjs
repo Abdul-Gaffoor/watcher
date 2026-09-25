@@ -379,6 +379,57 @@ try {
     assert.ok(Math.abs(ratio - 16 / 9) < 0.05, `card art ratio was ${ratio.toFixed(3)}`);
   });
 
+  await step('a tap on hidden controls reveals them instead of pausing', async () => {
+    // The reported bug: the chrome hides itself while playing and stops taking
+    // pointer events, so on a touch screen -- where no pointer movement brings
+    // it back first -- a tap aimed at the full screen button landed on the
+    // video underneath and paused instead.
+    const touch = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      isMobile: true,
+      hasTouch: true,
+    });
+    try {
+      const phone = await touch.newPage();
+      await phone.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
+      await phone.fill('input[name="username"]', USERNAME);
+      await phone.fill('input[name="password"]', PASSWORD);
+      await phone.click('button[type="submit"]');
+      await phone.waitForSelector('.hero__title', { timeout: 15_000 });
+
+      await phone.goto(`${BASE}/watch/${FIXTURE_TITLE_ID}`, { waitUntil: 'networkidle' });
+      await phone.waitForSelector('video');
+      await phone.evaluate(async () => {
+        const video = document.querySelector('video');
+        video.muted = true;
+        await video.play();
+      });
+
+      // Wait past the idle timeout so the chrome is hidden and inert.
+      await phone.waitForFunction(
+        () => document.querySelector('.player')?.dataset.idle === 'true',
+        undefined,
+        { timeout: 10_000 },
+      );
+
+      // Tap where the full screen button sits. It is behind the hidden chrome,
+      // so this lands on the video.
+      const box = await phone.locator('.pc__row').boundingBox();
+      await phone.touchscreen.tap(box.x + box.width - 20, box.y + box.height / 2);
+      await phone.waitForTimeout(400);
+
+      const after = await phone.evaluate(() => ({
+        paused: document.querySelector('video').paused,
+        idle: document.querySelector('.player')?.dataset.idle ?? 'false',
+      }));
+
+      assert.equal(after.paused, false, 'the tap must not have paused playback');
+      assert.notEqual(after.idle, 'true', 'the tap should have brought the controls back');
+    } finally {
+      await touch.close();
+    }
+  });
+
   // ------------------------------------------------- course and theatre --
 
   await step('a course reads as a syllabus, numbered and in order', async () => {

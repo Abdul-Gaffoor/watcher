@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type Hls from 'hls.js';
 import type { Title } from '../lib/types';
 import { PlayerControls } from './PlayerControls';
+import { toggleFullscreen } from './fullscreen';
 
 interface HlsPlayerProps {
   title: Title;
@@ -209,10 +210,7 @@ export function HlsPlayer({ title, startAt = 0, onProgress, onEnded, onNext, nex
       m: () => {
         video.muted = !video.muted;
       },
-      f: () => {
-        if (document.fullscreenElement) void document.exitFullscreen();
-        else void stageRef.current?.requestFullscreen?.().catch(() => undefined);
-      },
+      f: () => toggleFullscreen(stageRef.current, videoRef.current),
       n: () => onNext?.(),
       arrowup: () => {
         video.volume = Math.min(1, video.volume + 0.1);
@@ -238,7 +236,15 @@ export function HlsPlayer({ title, startAt = 0, onProgress, onEnded, onNext, nex
       tabIndex={0}
       onKeyDown={onKeyDown}
       onPointerMove={wake}
-      onPointerLeave={() => playing && setIdle(true)}
+      // Any touch anywhere on the stage restarts the idle timer, since a tap
+      // produces no pointermove to keep the chrome up with.
+      onPointerDown={wake}
+      onPointerLeave={(event) => {
+        // A mouse leaving the player means the viewer has looked away. A touch
+        // "leaves" the moment the finger lifts, so honouring it there would
+        // hide the controls again the instant a tap revealed them.
+        if (event.pointerType === 'mouse' && playing) setIdle(true);
+      }}
     >
       <video
         ref={attachVideo}
@@ -247,11 +253,19 @@ export function HlsPlayer({ title, startAt = 0, onProgress, onEnded, onNext, nex
         preload="metadata"
         poster={title.backdrop ?? title.poster}
         crossOrigin="use-credentials"
-        onClick={togglePlay}
-        onDoubleClick={() => {
-          if (document.fullscreenElement) void document.exitFullscreen();
-          else void stageRef.current?.requestFullscreen?.().catch(() => undefined);
+        onClick={() => {
+          // While the chrome is hidden it does not take pointer events, so a
+          // tap aimed at a button lands here instead. On a touch screen there
+          // is no pointer movement to bring the controls back first, which is
+          // how tapping full screen came to pause the video. The first tap
+          // reveals the chrome and does nothing else.
+          if (idle) {
+            wake();
+            return;
+          }
+          togglePlay();
         }}
+        onDoubleClick={() => toggleFullscreen(stageRef.current, videoRef.current)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onWaiting={() => setWaiting(true)}

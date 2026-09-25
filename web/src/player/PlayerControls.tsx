@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { formatClock } from '../lib/format';
+import { isFullscreen, toggleFullscreen, watchFullscreen } from './fullscreen';
 
 /**
  * The control bar.
@@ -83,11 +84,10 @@ export function PlayerControls({ video, stage, onNext, nextLabel, hasSubtitles }
     return () => events.forEach((name) => video.removeEventListener(name, sync));
   }, [video]);
 
-  useEffect(() => {
-    const onChange = () => setFullscreen(Boolean(document.fullscreenElement));
-    document.addEventListener('fullscreenchange', onChange);
-    return () => document.removeEventListener('fullscreenchange', onChange);
-  }, []);
+  // iOS fires its own events on the video and never fires fullscreenchange, so
+  // watching the document alone leaves this icon wrong for the whole time the
+  // video is full screen.
+  useEffect(() => watchFullscreen(video, () => setFullscreen(isFullscreen(video))), [video]);
 
   const seekTo = useCallback(
     (seconds: number) => {
@@ -121,11 +121,6 @@ export function PlayerControls({ video, stage, onNext, nextLabel, hasSubtitles }
     if (!scrubbing) return;
     event.currentTarget.releasePointerCapture(event.pointerId);
     setScrubbing(false);
-  };
-
-  const toggleFullscreen = () => {
-    if (document.fullscreenElement) void document.exitFullscreen();
-    else void stage?.requestFullscreen?.().catch(() => undefined);
   };
 
   const cycleSpeed = () => {
@@ -264,7 +259,7 @@ export function PlayerControls({ video, stage, onNext, nextLabel, hasSubtitles }
         <button
           className="pc__button"
           type="button"
-          onClick={toggleFullscreen}
+          onClick={() => toggleFullscreen(stage, video)}
           aria-label={fullscreen ? 'Exit full screen' : 'Full screen'}
         >
           <Icon
