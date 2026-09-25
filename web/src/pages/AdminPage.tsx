@@ -28,6 +28,39 @@ function slugify(value: string): string {
     .slice(0, 64);
 }
 
+/** Matches MAX_DEPTH in backend/src/catalog.mjs, which refuses anything deeper. */
+const MAX_DEPTH = 6;
+
+/**
+ * A collection and everything under it. Moving one into its own descendant
+ * would detach that whole branch from the tree and make a loop out of it, so
+ * those are never offered as destinations -- the server refuses it too, but a
+ * dropdown that lists an option it will then reject is a trap.
+ */
+function descendantIds(collections: Collection[], rootId: string): Set<string> {
+  const inside = new Set<string>([rootId]);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const collection of collections) {
+      const parent = collection.parentId ?? null;
+      if (parent && inside.has(parent) && !inside.has(collection.id)) {
+        inside.add(collection.id);
+        grew = true;
+      }
+    }
+  }
+  return inside;
+}
+
+/** How deep the branch under this collection runs, counting itself as one. */
+function branchHeight(collections: Collection[], rootId: string): number {
+  const children = collections.filter((collection) => (collection.parentId ?? null) === rootId);
+  return children.length === 0
+    ? 1
+    : 1 + Math.max(...children.map((child) => branchHeight(collections, child.id)));
+}
+
 /** Depth-first, so the list reads as the tree it represents. */
 function flatten(collections: Collection[], parentId: string | null = null, depth = 0): {
   collection: Collection;
@@ -77,6 +110,17 @@ export function AdminPage() {
   }, [load]);
 
   const rows = useMemo(() => flatten(catalog?.collections ?? []), [catalog]);
+
+  /**
+   * Names are editable in place, so they can be emptied in place. The server
+   * refuses a blank one, but finding that out from a failed save after five
+   * other edits is a poor way to learn it.
+   */
+  const blank = useMemo(() => {
+    const collections = (catalog?.collections ?? []).filter((c) => c.name.trim() === '').length;
+    const titles = (catalog?.titles ?? []).filter((t) => t.title.trim() === '').length;
+    return collections + titles;
+  }, [catalog]);
   const titleCount = useCallback(
     (collectionId: string) =>
       (catalog?.titles ?? []).filter((title) => title.collectionId === collectionId).length,
@@ -162,6 +206,31 @@ export function AdminPage() {
       ),
     });
 
+  /**
+   * Moves a whole branch. Everything under it comes along, because a child
+   * names its parent rather than the other way round -- so one field changes
+   * and the shelf it was on moves with it.
+   */
+  const reparent = (id: string, parentId: string | null) =>
+    mutate({
+      collections: catalog.collections.map((collection) =>
+        collection.id === id ? { ...collection, parentId } : collection,
+      ),
+    });
+
+  /**
+   * Destinations this collection could actually move to: not itself, not
+   * anything already inside it, and nothing so deep that its own branch would
+   * be pushed past the limit.
+   */
+  const destinationsFor = (id: string) => {
+    const forbidden = descendantIds(catalog.collections, id);
+    const height = branchHeight(catalog.collections, id);
+    return rows.filter(
+      ({ collection, depth }) => !forbidden.has(collection.id) && depth + 1 + height <= MAX_DEPTH,
+    );
+  };
+
   const remove = (id: string) => {
     const hasChildren = catalog.collections.some((collection) => collection.parentId === id);
     if (hasChildren || titleCount(id) > 0) {
@@ -173,6 +242,26 @@ export function AdminPage() {
 
   const removeTitle = (id: string) =>
     mutate({ titles: catalog.titles.filter((title) => title.id !== id) });
+
+  /**
+   * Renames what a viewer reads. The id is deliberately left alone: it is the
+   * S3 prefix the video and its poster already live under, so changing it
+   * would point the title at nothing. A name typed wrong at upload is fixed
+   * here; the storage key keeps whatever it was born with, and no viewer sees
+   * it.
+   */
+  const renameTitle = (id: string, name: string) =>
+    mutate({
+      titles: catalog.titles.map((title) => (title.id === id ? { ...title, title: name } : title)),
+    });
+
+  /** Refiles a video. Also just one field: the video itself does not move. */
+  const moveTitle = (id: string, collectionId: string) =>
+    mutate({
+      titles: catalog.titles.map((title) =>
+        title.id === id ? { ...title, collectionId } : title,
+      ),
+    });
 
   /**
    * Upload, then record. The file lands in S3 first and the catalog is saved
@@ -347,6 +436,25 @@ export function AdminPage() {
                 value={collection.name}
                 onChange={(event) => rename(collection.id, event.target.value)}
               />
+
+              {/* Moving a collection moves everything under it. This is how a
+                  "Trading" created after the fact collects the courses that
+                  were made at the top level before it existed. */}
+              <select
+                className="admin__move"
+                aria-label={`Move ${collection.name} into`}
+                value={collection.parentId ?? ''}
+                onChange={(event) => reparent(collection.id, event.target.value || null)}
+              >
+                <option value="">Top level</option>
+                {destinationsFor(collection.id).map(({ collection: option, depth: optionDepth }) => (
+                  <option key={option.id} value={option.id}>
+                    {'\u00a0\u00a0'.repeat(optionDepth)}
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+
               <span className="admin__count">{titleCount(collection.id)} videos</span>
               <button className="admin__remove" type="button" onClick={() => remove(collection.id)}>
                 Remove
@@ -364,11 +472,31 @@ export function AdminPage() {
           <ul className="admin__titles">
             {catalog.titles.map((title) => (
               <li key={title.id}>
-                <span className="admin__title-name">{title.title}</span>
-                <span className="admin__count">
-                  {rows.find(({ collection }) => collection.id === title.collectionId)?.collection
-                    .name ?? 'Unfiled'}
-                </span>
+                {/* The name only. The id underneath is the storage key the
+                    video and its poster already live under, so it stays as it
+                    was uploaded -- a typo in the name is fixed here without
+                    moving a byte. */}
+                <input
+                  className="admin__rename"
+                  aria-label={`Rename ${title.title}`}
+                  value={title.title}
+                  onChange={(event) => renameTitle(title.id, event.target.value)}
+                />
+
+                <select
+                  className="admin__move"
+                  aria-label={`Move ${title.title} into`}
+                  value={title.collectionId}
+                  onChange={(event) => moveTitle(title.id, event.target.value)}
+                >
+                  {rows.map(({ collection, depth }) => (
+                    <option key={collection.id} value={collection.id}>
+                      {'\u00a0\u00a0'.repeat(depth)}
+                      {collection.name}
+                    </option>
+                  ))}
+                </select>
+
                 <button className="admin__remove" type="button" onClick={() => removeTitle(title.id)}>
                   Remove
                 </button>
@@ -382,7 +510,7 @@ export function AdminPage() {
         <button
           className="button button--primary"
           type="button"
-          disabled={!dirty || saving}
+          disabled={!dirty || saving || blank > 0}
           onClick={() => void save()}
         >
           {saving ? 'Saving…' : 'Save changes'}
@@ -390,7 +518,13 @@ export function AdminPage() {
         <button className="button button--ghost" type="button" onClick={() => void load()}>
           Discard and reload
         </button>
-        {dirty && <span className="admin__count">Unsaved changes</span>}
+        {blank > 0 ? (
+          <span className="admin__blank" role="alert">
+            {blank === 1 ? 'One name is empty' : `${blank} names are empty`} — fill it in to save.
+          </span>
+        ) : (
+          dirty && <span className="admin__count">Unsaved changes</span>
+        )}
       </div>
     </main>
   );

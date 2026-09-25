@@ -337,6 +337,103 @@ try {
     assert.ok(Math.abs(ratio - 16 / 9) < 0.05, `card art ratio was ${ratio.toFixed(3)}`);
   });
 
+  // --------------------------------------------------- the dashboard ----
+
+  await step('a collection can be moved under one made after it', async () => {
+    // The mistake this exists for: a collection sitting at the top level, and
+    // the thing that should contain it thought of afterwards.
+    await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__tree');
+
+    const indentOf = (name) =>
+      page.evaluate(
+        (n) =>
+          parseInt(
+            document.querySelector(`select[aria-label="Move ${n} into"]`).closest('li').style
+              .paddingLeft,
+            10,
+          ),
+        name,
+      );
+
+    // Movies starts at the top level, which is what makes the move real
+    // rather than a no-op that would pass whatever the code did.
+    assert.equal(await indentOf('Movies'), 0, 'Movies should start at the top level');
+    assert.equal(await page.locator('select[aria-label="Move Movies into"]').inputValue(), '');
+
+    await page.fill('.admin__form--inline input[type="text"]', 'Library');
+    await page.selectOption('.admin__form--inline select', '');
+    await page.click('button:has-text("Add")');
+
+    await page.selectOption('select[aria-label="Move Movies into"]', 'library');
+    assert.ok(await indentOf('Movies') > 0, 'Movies should now be nested');
+    // Its own children came with it, which is the point of moving a branch.
+    assert.ok(await indentOf('Telugu') > (await indentOf('Movies')), 'Telugu should still be inside Movies');
+
+    await page.click('button:has-text("Save changes")');
+    await page.waitForSelector('.admin__notice', { timeout: 15_000 });
+
+    // And it survives a reload, so it was the saved document that changed.
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__tree');
+    assert.equal(
+      await page.locator('select[aria-label="Move Movies into"]').inputValue(),
+      'library',
+    );
+  });
+
+  await step('a collection is never offered a destination inside itself', async () => {
+    await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__tree');
+
+    // Trading holds Elliott Wave, SMC and more. Offering any of them would
+    // detach the branch and make a loop of it; the server refuses that, and a
+    // dropdown listing an option it will then reject is a trap.
+    const offered = (
+      await page.locator('select[aria-label="Move Trading into"] option').allTextContents()
+    ).map((text) => text.trim());
+
+    for (const forbidden of ['Trading', 'Elliott Wave', 'SMC', 'SweeGlu Elliott Wave Course']) {
+      assert.equal(offered.includes(forbidden), false, `${forbidden} must not be offered`);
+    }
+    assert.ok(offered.includes('Top level'));
+    // Somewhere unrelated is still a legitimate destination.
+    assert.ok(offered.includes('Library'), 'an unrelated collection should still be offered');
+  });
+
+  await step('a video can be renamed and refiled without touching its storage', async () => {
+    await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__titles');
+
+    const before = page.locator('.admin__titles input.admin__rename').first();
+    const original = await before.inputValue();
+    const corrected = `${original} (corrected)`;
+
+    await before.fill(corrected);
+    await page.click('button:has-text("Save changes")');
+    await page.waitForSelector('.admin__notice', { timeout: 15_000 });
+
+    await page.reload({ waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__titles');
+    assert.equal(
+      await page.locator('.admin__titles input.admin__rename').first().inputValue(),
+      corrected,
+    );
+
+    // The rename must not have moved the video: the player still finds it.
+    await page.goto(`${BASE}/watch/${FIXTURE_TITLE_ID}`, { waitUntil: 'networkidle' });
+    assert.equal(await page.locator('.player__error').count(), 0);
+  });
+
+  await step('an empty name blocks the save rather than failing it', async () => {
+    await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__tree');
+
+    await page.locator('.admin__tree input.admin__rename').first().fill('');
+    await page.waitForSelector('.admin__blank', { timeout: 5_000 });
+    assert.equal(await page.locator('button:has-text("Save changes")').isDisabled(), true);
+  });
+
   // --------------------------------------------------- pairing a device --
   // Two contexts, because the whole point is that two devices are involved:
   // one that shows a code and never sees a password, and one that is already

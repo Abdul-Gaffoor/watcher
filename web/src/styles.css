@@ -1389,3 +1389,29 @@ img {
   pointer-events: none;
   z-index: 3;
 }
+
+/* Where a row's collection is chosen. Quiet at rest — a dashboard of loud
+   dropdowns reads as a form to fill in rather than a library to tidy. */
+.admin__move {
+  min-width: 0;
+  max-width: 15rem;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.admin__move:hover,
+.admin__move:focus-visible {
+  border-color: var(--line);
+  color: var(--text);
+}
+
+.admin__blank {
+  color: #f0b45a;
+  font-size: 14px;
+}

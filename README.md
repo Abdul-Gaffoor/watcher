@@ -203,10 +203,20 @@ whole file, and the catalog is only updated once the video has actually landed.
 Nothing passes through the API, because a request body through Lambda is capped
 in megabytes and a lesson is gigabytes.
 
-The same screen edits the structure: add a collection anywhere, rename it,
-remove an empty one. Changes are saved as one document with a revision, so two
-admins editing at once get a conflict rather than one silently overwriting the
-other.
+The same screen edits the structure: add a collection anywhere, rename it, move
+it, or remove an empty one. Moving takes the whole branch with it, which is how
+a category thought of after the courses were created collects them — make
+"Trading" at the top level, then set each course's **Inside** to it. A
+collection is never offered a destination inside itself, because that would
+detach the branch and make a loop of it.
+
+Videos can be renamed and refiled the same way. A rename changes only what a
+viewer reads: the id underneath is the storage prefix the video and its poster
+already live under, so a name typed wrong at upload is corrected without moving
+a byte.
+
+Changes are saved as one document with a revision, so two admins editing at
+once get a conflict rather than one silently overwriting the other.
 
 **Only admins see it.** The role rides in the session and is checked on the
 server for every request the dashboard makes. Hiding the link is a courtesy,
