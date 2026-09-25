@@ -2279,3 +2279,94 @@ img {
     font-size: 12.5px;
   }
 }
+
+/* ---------- Dashboard: lesson order ---------- */
+
+.admin__group + .admin__group {
+  margin-top: 26px;
+}
+
+.admin__group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin__group-head h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+
+.admin__group-head .admin__count {
+  flex: 1;
+}
+
+.admin__sort {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 5px 13px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.admin__sort:hover {
+  color: var(--text);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* The number is the lesson number a viewer sees, so the dashboard shows the
+   same thing rather than a position you have to infer. */
+.admin__lesson {
+  flex: 0 0 26px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin__order {
+  display: flex;
+  gap: 2px;
+}
+
+.admin__step {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.16s ease, opacity 0.16s ease;
+}
+
+.admin__step:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Kept in place rather than hidden: the first lesson having no "up" is
+   information, and a row that changes width as it moves is disorienting. */
+.admin__step:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.admin__titles {
+  counter-reset: none;
+}
+
+.admin__titles li {
+  list-style: none;
+}

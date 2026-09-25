@@ -215,6 +215,13 @@ viewer reads: the id underneath is the storage prefix the video and its poster
 already live under, so a name typed wrong at upload is corrected without moving
 a byte.
 
+**Lesson order** is the order the videos sit in, since a course is read top to
+bottom and nothing else in the catalog expresses sequence. The dashboard groups
+videos under their collection and numbers them, so the numbers there are the
+ones a viewer sees. Arrows move one lesson at a time; **Sort by name** does the
+whole course at once and sorts numerically, so "Class - 2" lands after
+"Class - 1" and before "Class - 10" rather than between them.
+
 Changes are saved as one document with a revision, so two admins editing at
 once get a conflict rather than one silently overwriting the other.
 

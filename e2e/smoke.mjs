@@ -530,6 +530,54 @@ try {
     assert.equal(await page.locator('.player__error').count(), 0);
   });
 
+  await step('lessons can be reordered, and the course follows', async () => {
+    await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__group');
+
+    // The dashboard groups by course and numbers the rows, because "move up"
+    // means nothing until you can see what it moves above.
+    // Matched on the heading, not on text anywhere inside: every row carries a
+    // <select> listing all collection names, so "has text" matches every group.
+    const group = page
+      .locator('.admin__group')
+      .filter({ has: page.locator('h3', { hasText: 'Gaurdeer Mentorship' }) });
+    const namesNow = () => group.locator('input.admin__rename').evaluateAll((els) => els.map((el) => el.value));
+
+    const before = await namesNow();
+    assert.equal(before.length, 2);
+
+    await group.locator('.admin__step[aria-label*="later"]').first().click();
+    const after = await namesNow();
+    assert.deepEqual(after, [before[1], before[0]], 'the two lessons should have swapped');
+
+    await page.click('button:has-text("Save changes")');
+    await page.waitForSelector('.admin__notice', { timeout: 15_000 });
+
+    // The viewer numbers lessons from the same order, so the course now leads
+    // with what the dashboard put first.
+    await page.goto(`${BASE}/c/gaurdeer-mentorship`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.syllabus__link');
+    const lessons = await page.$$eval('.syllabus__name', (els) => els.map((el) => el.textContent));
+    assert.deepEqual(lessons, after, 'the syllabus should read in the saved order');
+  });
+
+  await step('sorting by name puts Class 2 after Class 1, not after Class 10', async () => {
+    await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.admin__group');
+
+    const group = page
+      .locator('.admin__group')
+      .filter({ has: page.locator('h3', { hasText: 'Gaurdeer Mentorship' }) });
+    await group.locator('button:has-text("Sort by name")').click();
+
+    const sorted = await group.locator('input.admin__rename').evaluateAll((els) => els.map((el) => el.value));
+    // A plain string compare would be fine for these two; the collator is
+    // there for "Class - 2" against "Class - 10", which it is not.
+    assert.deepEqual(sorted, [...sorted].sort((a, b) =>
+      new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare(a, b),
+    ));
+  });
+
   await step('an empty name blocks the save rather than failing it', async () => {
     await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.admin__tree');

@@ -35,6 +35,13 @@ function slugify(value: string): string {
     .slice(0, 64);
 }
 
+/**
+ * "Class - 2" must sort after "Class - 1" and before "Class - 10". A plain
+ * string compare puts 10 between 1 and 2, which is exactly the kind of order
+ * nobody notices until lesson ten is second.
+ */
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
 /** Matches MAX_DEPTH in backend/src/catalog.mjs, which refuses anything deeper. */
 const MAX_DEPTH = 6;
 
@@ -123,6 +130,22 @@ export function AdminPage() {
    * refuses a blank one, but finding that out from a failed save after five
    * other edits is a poor way to learn it.
    */
+  /**
+   * Videos grouped under the collection they sit in, in tree order. A flat
+   * list of everything cannot show sequence, and sequence is the thing being
+   * edited: "move up" is meaningless until you can see what it moves above.
+   */
+  const groups = useMemo(() => {
+    if (!catalog) return [];
+    return rows
+      .map(({ collection, depth }) => ({
+        collection,
+        depth,
+        titles: catalog.titles.filter((title) => title.collectionId === collection.id),
+      }))
+      .filter((group) => group.titles.length > 0);
+  }, [catalog, rows]);
+
   const blank = useMemo(() => {
     const collections = (catalog?.collections ?? []).filter((c) => c.name.trim() === '').length;
     const titles = (catalog?.titles ?? []).filter((t) => t.title.trim() === '').length;
@@ -261,6 +284,51 @@ export function AdminPage() {
     mutate({
       titles: catalog.titles.map((title) => (title.id === id ? { ...title, title: name } : title)),
     });
+
+  /**
+   * Lesson order is the order the titles sit in the catalog array, because a
+   * course is read top to bottom and nothing else in the document expresses
+   * sequence. Reordering therefore swaps two entries -- but only the slots
+   * belonging to this collection, so moving a lesson inside one course cannot
+   * disturb the position of anything in another.
+   */
+  const slotsFor = (collectionId: string) =>
+    catalog.titles.reduce<number[]>((slots, title, index) => {
+      if (title.collectionId === collectionId) slots.push(index);
+      return slots;
+    }, []);
+
+  const reorderTitle = (id: string, delta: -1 | 1) => {
+    const title = catalog.titles.find((entry) => entry.id === id);
+    if (!title) return;
+
+    const slots = slotsFor(title.collectionId);
+    const here = slots.findIndex((slot) => catalog.titles[slot].id === id);
+    const there = here + delta;
+    if (here === -1 || there < 0 || there >= slots.length) return;
+
+    const titles = [...catalog.titles];
+    [titles[slots[here]], titles[slots[there]]] = [titles[slots[there]], titles[slots[here]]];
+    mutate({ titles });
+  };
+
+  /**
+   * The bulk fix. A course uploaded out of order is tedious to walk into place
+   * one step at a time, and its lessons are almost always named in sequence
+   * already -- so offer the sort rather than the twelve button presses.
+   */
+  const sortLessons = (collectionId: string) => {
+    const slots = slotsFor(collectionId);
+    const sorted = slots
+      .map((slot) => catalog.titles[slot])
+      .sort((a, b) => byName.compare(a.title, b.title));
+
+    const titles = [...catalog.titles];
+    slots.forEach((slot, index) => {
+      titles[slot] = sorted[index];
+    });
+    mutate({ titles });
+  };
 
   /** Refiles a video. Also just one field: the video itself does not move. */
   const moveTitle = (id: string, collectionId: string) =>
@@ -478,40 +546,91 @@ export function AdminPage() {
         {catalog.titles.length === 0 ? (
           <p className="row__empty">Nothing uploaded yet.</p>
         ) : (
-          <ul className="admin__titles">
-            {catalog.titles.map((title) => (
-              <li key={title.id}>
-                {/* The name only. The id underneath is the storage key the
-                    video and its poster already live under, so it stays as it
-                    was uploaded -- a typo in the name is fixed here without
-                    moving a byte. */}
-                <input
-                  className="admin__rename"
-                  aria-label={`Rename ${title.title}`}
-                  value={title.title}
-                  onChange={(event) => renameTitle(title.id, event.target.value)}
-                />
+          groups.map(({ collection, titles }) => (
+            <section className="admin__group" key={collection.id}>
+              <header className="admin__group-head">
+                <h3>{collection.name}</h3>
+                <span className="admin__count">
+                  {titles.length} {titles.length === 1 ? 'video' : 'videos'}
+                </span>
+                {titles.length > 1 && (
+                  <button
+                    className="admin__sort"
+                    type="button"
+                    onClick={() => sortLessons(collection.id)}
+                  >
+                    Sort by name
+                  </button>
+                )}
+              </header>
 
-                <select
-                  className="admin__move"
-                  aria-label={`Move ${title.title} into`}
-                  value={title.collectionId}
-                  onChange={(event) => moveTitle(title.id, event.target.value)}
-                >
-                  {rows.map(({ collection, depth }) => (
-                    <option key={collection.id} value={collection.id}>
-                      {'\u00a0\u00a0'.repeat(depth)}
-                      {collection.name}
-                    </option>
-                  ))}
-                </select>
+              <ol className="admin__titles">
+                {titles.map((title, index) => (
+                  <li key={title.id}>
+                    <span className="admin__lesson" aria-hidden="true">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
 
-                <button className="admin__remove" type="button" onClick={() => removeTitle(title.id)}>
-                  Remove
-                </button>
-              </li>
-            ))}
-          </ul>
+                    {/* The name only. The id underneath is the storage key the
+                        video and its poster already live under, so it stays as
+                        it was uploaded -- a typo in the name is fixed here
+                        without moving a byte. */}
+                    <input
+                      className="admin__rename"
+                      aria-label={`Rename ${title.title}`}
+                      value={title.title}
+                      onChange={(event) => renameTitle(title.id, event.target.value)}
+                    />
+
+                    {titles.length > 1 && (
+                      <span className="admin__order">
+                        <button
+                          className="admin__step"
+                          type="button"
+                          disabled={index === 0}
+                          aria-label={`Move ${title.title} earlier`}
+                          onClick={() => reorderTitle(title.id, -1)}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          className="admin__step"
+                          type="button"
+                          disabled={index === titles.length - 1}
+                          aria-label={`Move ${title.title} later`}
+                          onClick={() => reorderTitle(title.id, 1)}
+                        >
+                          ↓
+                        </button>
+                      </span>
+                    )}
+
+                    <select
+                      className="admin__move"
+                      aria-label={`Move ${title.title} into`}
+                      value={title.collectionId}
+                      onChange={(event) => moveTitle(title.id, event.target.value)}
+                    >
+                      {rows.map(({ collection: option, depth }) => (
+                        <option key={option.id} value={option.id}>
+                          {'\u00a0\u00a0'.repeat(depth)}
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      className="admin__remove"
+                      type="button"
+                      onClick={() => removeTitle(title.id)}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          ))
         )}
       </section>
 
