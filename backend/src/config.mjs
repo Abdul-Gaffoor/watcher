@@ -79,15 +79,20 @@ export function getConfig() {
     }
     cached.signsMediaCookies = configured === signerParts.length;
 
-    const cognitoParts = [cached.cognitoUserPoolId, cached.cognitoClientId, cached.cognitoRegion];
+    // Only the pool and the client decide whether Cognito is in play. The
+    // region must not: Lambda always sets AWS_REGION, so counting it would make
+    // every roster deployment look half-configured and refuse to start.
+    const cognitoParts = [cached.cognitoUserPoolId, cached.cognitoClientId];
     const cognitoConfigured = cognitoParts.filter(Boolean).length;
     if (cognitoConfigured !== 0 && cognitoConfigured !== cognitoParts.length) {
       cached = undefined;
-      throw new Error(
-        'COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID and COGNITO_REGION must be set together or not at all',
-      );
+      throw new Error('COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID must be set together or not at all');
     }
     cached.usesCognito = cognitoConfigured === cognitoParts.length;
+    if (cached.usesCognito && !cached.cognitoRegion) {
+      cached = undefined;
+      throw new Error('COGNITO_REGION (or AWS_REGION) is required when using Cognito');
+    }
 
     // Exactly one directory has to be in charge. Neither leaves nobody able to
     // sign in; both would make it ambiguous which password is authoritative.
