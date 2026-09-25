@@ -282,32 +282,72 @@ try {
     await page.waitForURL(/\/login$/);
   });
 
-  await step('the layout does not overflow at phone width', async () => {
+  await step('no page overflows or hides its heading at phone width', async () => {
+    // Every route, not just the first one. Checking only the catalog is how
+    // the dashboard shipped 300px wider than an iPhone: its rows are grid
+    // items, grid items default to min-width:auto, and a select full of long
+    // collection names refuses to shrink. Nothing about the browse page could
+    // ever have caught that.
     await page.setViewportSize({ width: 390, height: 844 });
     await page.fill('input[name="username"]', USERNAME);
     await page.fill('input[name="password"]', PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForSelector('.hero__title', { timeout: 15_000 });
-    const { overflow, blame } = await page.evaluate(() => {
-      const limit = document.documentElement.clientWidth;
-      // Naming the element is the difference between a number to reproduce and
-      // a fix. Anything inside a horizontal scroller is meant to exceed it.
-      const blame = [...document.querySelectorAll('body *')]
-        .filter((el) => !el.closest('.row__scroller'))
-        .map((el) => ({ el, box: el.getBoundingClientRect() }))
-        .filter(({ box }) => box.width > 0 && box.right > limit + 1)
-        .sort((a, b) => b.box.right - a.box.right)
-        .slice(0, 3)
-        .map(({ el, box }) => `${el.tagName.toLowerCase()}.${el.classList[0] ?? ''} → ${Math.round(box.right)}px`);
 
-      return {
-        overflow: document.documentElement.scrollWidth - limit,
-        blame,
-      };
-    });
-    assert.ok(overflow <= 1, `horizontal overflow of ${overflow}px — ${blame.join(', ') || 'no element past the edge'}`);
-    if (shotsDir) await page.screenshot({ path: `${shotsDir}/04-mobile.png` });
+    const routes = [
+      ['browse', '/'],
+      ['collection', '/c/elliott-wave'],
+      ['search', '/search?q=a'],
+      ['admin', '/admin'],
+      ['watch', `/watch/${FIXTURE_TITLE_ID}`],
+      ['pairing', '/pair'],
+    ];
+
+    const broken = [];
+    for (const [name, path] of routes) {
+      await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(350);
+
+      const result = await page.evaluate(() => {
+        const limit = document.documentElement.clientWidth;
+        const blame = [...document.querySelectorAll('body *')]
+          // A shelf is meant to run off the edge, and the top scrim spans
+          // whatever the document turned out to be.
+          .filter((el) => !el.closest('.row__scroller') && !el.closest('.top-scrim'))
+          .map((el) => ({ el, box: el.getBoundingClientRect() }))
+          .filter(({ box }) => box.width > 0 && box.right > limit + 1)
+          .sort((a, b) => b.box.right - a.box.right)
+          .slice(0, 2)
+          .map(({ el, box }) => `${el.tagName.toLowerCase()}.${el.classList[0] ?? ''}@${Math.round(box.right)}px`);
+
+        // The search floats. On a phone it spans nearly the full width, so a
+        // page that opens with a heading has to start below it.
+        const bar = document.querySelector('.searchbar')?.getBoundingClientRect();
+        const heading = document.querySelector('h1, h2')?.getBoundingClientRect();
+        const covered = Boolean(
+          bar && heading &&
+          heading.top < bar.bottom && heading.bottom > bar.top &&
+          heading.left < bar.right && heading.right > bar.left,
+        );
+
+        return { overflow: document.documentElement.scrollWidth - limit, blame, covered };
+      });
+
+      if (result.overflow > 1) broken.push(`${name}: ${result.overflow}px wide — ${result.blame.join(', ') || 'no element past the edge'}`);
+      if (result.covered) broken.push(`${name}: the search bar covers the heading`);
+    }
+
+    if (shotsDir) {
+      await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+      await page.screenshot({ path: `${shotsDir}/04-mobile.png` });
+    }
+
+    // Back to desktop before anything else runs. This step used to be last, so
+    // leaving the window 390px wide cost nothing; it is not last any more.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    assert.equal(broken.length, 0, broken.join(' | '));
   });
+
   await step('a title with no artwork gets generated art, not a letter', async () => {
     // The old fallback was the title's first character on a flat panel, which
     // turned a course of "Class - 1", "Class - 2" into a wall of identical
@@ -345,16 +385,13 @@ try {
     await page.goto(`${BASE}/admin`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.admin__tree');
 
+    // Computed, not inline: the depth is set as a custom property and turned
+    // into padding by the stylesheet, so the inline style no longer carries it.
     const indentOf = (name) =>
-      page.evaluate(
-        (n) =>
-          parseInt(
-            document.querySelector(`select[aria-label="Move ${n} into"]`).closest('li').style
-              .paddingLeft,
-            10,
-          ),
-        name,
-      );
+      page.evaluate((n) => {
+        const row = document.querySelector(`select[aria-label="Move ${n} into"]`).closest('li');
+        return parseFloat(getComputedStyle(row).paddingLeft);
+      }, name);
 
     // Movies starts at the top level, which is what makes the move real
     // rather than a no-op that would pass whatever the code did.

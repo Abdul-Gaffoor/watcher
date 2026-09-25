@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from 'react';
 import { Navigate } from 'react-router-dom';
 import { Spinner } from '../components/Spinner';
 import { useAuth } from '../auth/AuthProvider';
@@ -429,7 +436,7 @@ export function AdminPage() {
 
         <ul className="admin__tree">
           {rows.map(({ collection, depth }) => (
-            <li key={collection.id} style={{ paddingLeft: `${depth * 22}px` }}>
+            <li key={collection.id} style={{ '--depth': depth } as CSSProperties}>
               <input
                 className="admin__rename"
                 aria-label={`Rename ${collection.name}`}
@@ -455,7 +462,9 @@ export function AdminPage() {
                 ))}
               </select>
 
-              <span className="admin__count">{titleCount(collection.id)} videos</span>
+              <span className="admin__count">
+                {titleCount(collection.id)} {titleCount(collection.id) === 1 ? 'video' : 'videos'}
+              </span>
               <button className="admin__remove" type="button" onClick={() => remove(collection.id)}>
                 Remove
               </button>

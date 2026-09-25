@@ -974,6 +974,29 @@ img {
   .admin__form--inline {
     grid-template-columns: 1fr;
   }
+
+  /* The floating search spans nearly the whole width here, so a page that
+     starts with a heading needs to start below it. The billboard is the
+     exception and deliberately runs underneath. */
+  .page__header {
+    padding-top: 78px;
+  }
+
+  :root {
+    --indent-step: 12px;
+  }
+
+  /* The name gets its own line and the controls share the next one. Four
+     things on one line is a row that cannot fit, whatever it is allowed to
+     shrink to. */
+  .admin__rename {
+    flex: 1 1 100%;
+  }
+
+  .admin__move {
+    flex: 1 1 auto;
+    max-width: none;
+  }
 }
 
 /* ---------- Library manager ---------- */
@@ -1083,10 +1106,22 @@ img {
   gap: 12px;
   padding: 6px 0;
   border-bottom: 1px solid #262626;
+  /* Grid items default to min-width:auto, so without this the row refuses to
+     shrink below the width of its own contents and takes the page with it --
+     which is exactly how the dashboard came to be 600px wide on a phone. */
+  min-width: 0;
+  flex-wrap: wrap;
+  /* Indent by level, but as a variable so a phone can use a smaller step
+     instead of spending a third of the screen on nesting. */
+  padding-left: calc(var(--depth, 0) * var(--indent-step, 22px));
+}
+
+.admin__move {
+  flex: 0 1 13rem;
 }
 
 .admin__rename {
-  flex: 1;
+  flex: 1 1 8rem;
   min-width: 0;
   padding: 6px 9px;
   border: 1px solid transparent;
@@ -1150,6 +1185,29 @@ img {
 @media (max-width: 760px) {
   .admin__form--inline {
     grid-template-columns: 1fr;
+  }
+
+  /* The floating search spans nearly the whole width here, so a page that
+     starts with a heading needs to start below it. The billboard is the
+     exception and deliberately runs underneath. */
+  .page__header {
+    padding-top: 78px;
+  }
+
+  :root {
+    --indent-step: 12px;
+  }
+
+  /* The name gets its own line and the controls share the next one. Four
+     things on one line is a row that cannot fit, whatever it is allowed to
+     shrink to. */
+  .admin__rename {
+    flex: 1 1 100%;
+  }
+
+  .admin__move {
+    flex: 1 1 auto;
+    max-width: none;
   }
 }
 
@@ -1414,4 +1472,27 @@ img {
 .admin__blank {
   color: #f0b45a;
   font-size: 14px;
+}
+
+
+/* ---------- The min-width:auto trap ---------- */
+
+/* Grid and flex items default to min-width:auto, which means they refuse to
+   shrink below the intrinsic width of their contents. A file input sized by
+   "Choose File" plus a long filename, or a select sized by its longest option,
+   then pushes its whole ancestry wider than the screen -- and the page scrolls
+   sideways on a phone for a reason nothing in the layout explains.
+ *
+ * This has now been the cause twice, so it is fixed for the containers rather
+ * than for the one element that happened to show it. */
+.field,
+.admin__form > *,
+.admin__form--inline > * {
+  min-width: 0;
+}
+
+.field input,
+.field select,
+.field textarea {
+  max-width: 100%;
 }
