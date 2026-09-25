@@ -12,6 +12,18 @@ locals {
   use_cloudfront = var.edge == "cloudfront"
   use_apigateway = var.edge == "apigateway"
 
+  use_cognito = var.auth_provider == "cognito"
+
+  # var.users is sensitive, and Terraform refuses a sensitive value as a
+  # for_each key because the key becomes a visible resource address. Usernames
+  # are not the secret part, so they are unwrapped for keying while the rest of
+  # each record, notably the email, stays sensitive.
+  viewer_keys    = local.use_cognito ? nonsensitive([for user in var.users : lower(user.username)]) : []
+  viewers_by_key = { for user in var.users : lower(user.username) => user }
+
+  # Where viewers are told to sign in, which the invitation email needs.
+  app_url = var.domain_name != null ? "https://${var.domain_name}" : "the address your administrator gave you"
+
   # Terraform requests and validates the certificate itself only when it also
   # controls DNS; an explicitly supplied ARN always wins.
   create_certificate = var.domain_name != null && var.acm_certificate_arn == null && var.route53_zone_id != null

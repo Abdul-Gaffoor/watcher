@@ -25,8 +25,30 @@ github_branches = ["master"]
 # Set false if this AWS account already has a GitHub OIDC provider.
 create_oidc_provider = true
 
+# --- Identity ----------------------------------------------------------------
+# "roster"  the scrypt list below, which is what is deployed today
+# "cognito" a managed user pool: required MFA, lockout, password policy,
+#           self-service reset, and no password material in this file at all
+#
+# Switching is two edits: set this to "cognito", and replace the users list with
+# the commented-out shape below. Your current password stops working at that
+# point; Cognito emails you a temporary one instead.
+auth_provider = "roster"
+
 # --- Viewers -----------------------------------------------------------------
-# Generate each hash with:  node scripts/hash-password.mjs
+# With auth_provider = "cognito", this is all a viewer needs. No secret, because
+# Cognito generates the temporary password and emails the invitation:
+#
+# users = [
+#   {
+#     username = "Abdul"
+#     name     = "Abdul"
+#     email    = "you@example.com"   # must be real; it receives the invitation
+#   },
+# ]
+#
+# With auth_provider = "roster", generate each hash with:
+#   node scripts/hash-password.mjs
 users = [
   {
     username      = "Abdul"

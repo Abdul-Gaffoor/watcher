@@ -1,4 +1,4 @@
-import type { Catalog, Session } from './types';
+import type { Catalog, LoginOutcome, Session } from './types';
 
 /**
  * Everything is same-origin in production (one CloudFront distribution fronts
@@ -41,9 +41,30 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: (username: string, password: string) =>
-    request<Session>('/api/login', {
+    request<LoginOutcome>('/api/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
+    }),
+
+  /** Replaces the temporary password an invited account is emailed. */
+  setNewPassword: (challengeToken: string, password: string) =>
+    request<LoginOutcome>('/api/login/new-password', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, password }),
+    }),
+
+  /** Confirms a freshly enrolled authenticator app is in sync. */
+  confirmMfaSetup: (challengeToken: string, code: string) =>
+    request<LoginOutcome>('/api/login/mfa-setup', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    }),
+
+  /** The ordinary second step once an app is enrolled. */
+  submitMfaCode: (challengeToken: string, code: string) =>
+    request<LoginOutcome>('/api/login/mfa', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
     }),
 
   logout: () => request<void>('/api/logout', { method: 'POST' }),

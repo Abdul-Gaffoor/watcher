@@ -48,6 +48,27 @@ variable "edge" {
   }
 }
 
+variable "auth_provider" {
+  type        = string
+  default     = "roster"
+  description = <<-DESC
+    Where viewer credentials live.
+
+    "cognito" is the real answer: a managed user pool with required MFA,
+    lockout, a password policy and self-service reset. Terraform declares who
+    may sign in; Cognito emails each invitee a temporary password, so no
+    password or hash is ever stored in this repository or in state.
+
+    "roster" is the original scrypt list in USERS_JSON. The local dev server and
+    the end-to-end suite run on it, because they must work with no AWS account.
+  DESC
+
+  validation {
+    condition     = contains(["roster", "cognito"], var.auth_provider)
+    error_message = "auth_provider must be \"roster\" or \"cognito\"."
+  }
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}
@@ -104,12 +125,19 @@ variable "users" {
   type = list(object({
     username      = string
     name          = optional(string)
+    email         = optional(string)
     roles         = optional(list(string), ["viewer"])
-    password_hash = string
+    password_hash = optional(string)
   }))
   sensitive   = true
   description = <<-DESC
-    Viewers allowed to sign in. Generate each hash with:
+    Viewers allowed to sign in.
+
+    With auth_provider = "cognito", give a username and an email. Cognito mails
+    the invitation and the temporary password, so there is nothing secret to put
+    here at all.
+
+    With auth_provider = "roster", give a username and a password_hash from:
       node scripts/hash-password.mjs
     Never put a plaintext password here.
   DESC
@@ -120,8 +148,24 @@ variable "users" {
   }
 
   validation {
-    condition     = alltrue([for user in var.users : startswith(user.password_hash, "scrypt$")])
-    error_message = "Every password_hash must be a scrypt hash from scripts/hash-password.mjs, not a plaintext password."
+    condition = var.auth_provider != "roster" || alltrue([
+      for user in var.users : user.password_hash != null && startswith(coalesce(user.password_hash, ""), "scrypt$")
+    ])
+    error_message = "With auth_provider = \"roster\", every user needs a password_hash from scripts/hash-password.mjs."
+  }
+
+  validation {
+    condition = var.auth_provider != "cognito" || alltrue([
+      for user in var.users : user.email != null && can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[^@[:space:]]+$", coalesce(user.email, "")))
+    ])
+    error_message = "With auth_provider = \"cognito\", every user needs an email so Cognito can send the invitation and password resets."
+  }
+
+  validation {
+    condition = var.auth_provider != "cognito" || alltrue([
+      for user in var.users : user.password_hash == null
+    ])
+    error_message = "Remove password_hash when auth_provider = \"cognito\". Cognito owns passwords, and a hash here would only be a secret with nothing reading it."
   }
 
   validation {

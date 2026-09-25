@@ -9,14 +9,22 @@ import {
   type ReactNode,
 } from 'react';
 import { api, ApiError } from '../lib/api';
-import type { Session, SessionUser } from '../lib/types';
+import type { LoginOutcome, Session, SessionUser } from '../lib/types';
 
 type Status = 'loading' | 'authenticated' | 'anonymous';
 
 interface AuthContextValue {
   status: Status;
   user: SessionUser | null;
-  login: (username: string, password: string) => Promise<void>;
+  /**
+   * Each of these answers with the next step rather than a session, because the
+   * user pool requires a second factor and a password alone never finishes. Any
+   * step that does finish is adopted here, so callers only have to render.
+   */
+  login: (username: string, password: string) => Promise<LoginOutcome>;
+  setNewPassword: (challengeToken: string, password: string) => Promise<LoginOutcome>;
+  confirmMfaSetup: (challengeToken: string, code: string) => Promise<LoginOutcome>;
+  submitMfaCode: (challengeToken: string, code: string) => Promise<LoginOutcome>;
   logout: () => Promise<void>;
 }
 
@@ -88,11 +96,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [adopt, clearTimer]);
 
-  const login = useCallback(
-    async (username: string, password: string) => {
-      adopt(await api.login(username, password));
+  /** Adopts the session if this step finished the sign-in, and reports either way. */
+  const settle = useCallback(
+    (outcome: LoginOutcome) => {
+      if (outcome.status === 'authenticated') adopt(outcome);
+      return outcome;
     },
     [adopt],
+  );
+
+  const login = useCallback(
+    async (username: string, password: string) => settle(await api.login(username, password)),
+    [settle],
+  );
+
+  const setNewPassword = useCallback(
+    async (challengeToken: string, password: string) =>
+      settle(await api.setNewPassword(challengeToken, password)),
+    [settle],
+  );
+
+  const confirmMfaSetup = useCallback(
+    async (challengeToken: string, code: string) =>
+      settle(await api.confirmMfaSetup(challengeToken, code)),
+    [settle],
+  );
+
+  const submitMfaCode = useCallback(
+    async (challengeToken: string, code: string) =>
+      settle(await api.submitMfaCode(challengeToken, code)),
+    [settle],
   );
 
   const logout = useCallback(async () => {
@@ -106,8 +139,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [clearTimer]);
 
   const value = useMemo<AuthContextValue>(
-    () => ({ status, user, login, logout }),
-    [status, user, login, logout],
+    () => ({ status, user, login, setNewPassword, confirmMfaSetup, submitMfaCode, logout }),
+    [status, user, login, setNewPassword, confirmMfaSetup, submitMfaCode, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

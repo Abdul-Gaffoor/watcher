@@ -56,10 +56,19 @@ resource "aws_lambda_function" "api" {
 
   environment {
     variables = merge({
-      USERS_JSON          = local.users_json
       SESSION_SECRET      = random_password.session_secret.result
       SESSION_TTL_SECONDS = tostring(var.session_ttl_seconds)
       MEDIA_TTL_SECONDS   = tostring(var.media_ttl_seconds)
+      }, local.use_cognito ? {
+      # Cognito owns the directory, so the roster is not passed at all. The
+      # handler refuses to start with both configured, which keeps it
+      # unambiguous which password is authoritative.
+      COGNITO_USER_POOL_ID = aws_cognito_user_pool.this[0].id
+      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.web[0].id
+      COGNITO_REGION       = var.aws_region
+      COGNITO_ISSUER_LABEL = var.project_name
+      } : {
+      USERS_JSON = local.users_json
       }, local.use_cloudfront ? {
       # The signer is configured as a set or not at all. Absent, the handler
       # stops issuing cookies no edge would verify and media is gated by the

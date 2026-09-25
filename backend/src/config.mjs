@@ -17,7 +17,10 @@ function seconds(name, fallback) {
  * Swap this for Cognito or a user table when the roster outgrows a handful.
  */
 function loadUsers() {
-  const parsed = JSON.parse(required('USERS_JSON'));
+  // Absent when Cognito owns the directory. getConfig checks that one of the
+  // two is present, so an empty map here is never the whole story.
+  if (!process.env.USERS_JSON) return new Map();
+  const parsed = JSON.parse(process.env.USERS_JSON);
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error('USERS_JSON must be a non-empty array');
   }
@@ -53,6 +56,14 @@ export function getConfig() {
         ? process.env.CLOUDFRONT_PRIVATE_KEY.replace(/\\n/g, '\n')
         : null,
       mediaResource: process.env.MEDIA_RESOURCE || null,
+      // The managed directory. Configured as a set, like the signer: present
+      // and Cognito verifies credentials and enforces MFA; absent and the
+      // local scrypt roster does, which is what the dev server and the
+      // end-to-end suite run against.
+      cognitoUserPoolId: process.env.COGNITO_USER_POOL_ID || null,
+      cognitoClientId: process.env.COGNITO_CLIENT_ID || null,
+      cognitoRegion: process.env.COGNITO_REGION || process.env.AWS_REGION || null,
+      cognitoIssuerLabel: process.env.COGNITO_ISSUER_LABEL || 'Watcher',
       cookieDomain: process.env.COOKIE_DOMAIN || undefined,
       sessionTtlSeconds: seconds('SESSION_TTL_SECONDS', 12 * 60 * 60),
       mediaTtlSeconds: seconds('MEDIA_TTL_SECONDS', 60 * 60),
@@ -67,6 +78,27 @@ export function getConfig() {
       );
     }
     cached.signsMediaCookies = configured === signerParts.length;
+
+    const cognitoParts = [cached.cognitoUserPoolId, cached.cognitoClientId, cached.cognitoRegion];
+    const cognitoConfigured = cognitoParts.filter(Boolean).length;
+    if (cognitoConfigured !== 0 && cognitoConfigured !== cognitoParts.length) {
+      cached = undefined;
+      throw new Error(
+        'COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID and COGNITO_REGION must be set together or not at all',
+      );
+    }
+    cached.usesCognito = cognitoConfigured === cognitoParts.length;
+
+    // Exactly one directory has to be in charge. Neither leaves nobody able to
+    // sign in; both would make it ambiguous which password is authoritative.
+    if (!cached.usesCognito && cached.users.size === 0) {
+      cached = undefined;
+      throw new Error('Configure either COGNITO_* or USERS_JSON');
+    }
+    if (cached.usesCognito && cached.users.size > 0) {
+      cached = undefined;
+      throw new Error('Configure either COGNITO_* or USERS_JSON, not both');
+    }
   }
   return cached;
 }

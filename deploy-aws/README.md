@@ -161,6 +161,66 @@ cd ..
 
 ---
 
+## Two directories, one variable
+
+`auth_provider` decides where viewer credentials live.
+
+| | `roster` | `cognito` |
+| --- | --- | --- |
+| Store | scrypt hashes in the Lambda's environment | managed user pool |
+| MFA | none | required, authenticator app |
+| Lockout | per-container, resets on scale-out | enforced by the pool |
+| Password reset | regenerate a hash and redeploy | self-service by email |
+| Secrets in git or state | a hash per viewer | none |
+| Adding a viewer | edit, apply, tell them the password | edit, apply, Cognito emails the invitation |
+
+`cognito` is the one to be on. `roster` remains because the local dev server and
+the end-to-end suite have to work with no AWS account at all.
+
+### Switching to Cognito
+
+Two edits in `terraform.tfvars`, then apply:
+
+```hcl
+auth_provider = "cognito"
+
+users = [
+  { username = "Abdul", name = "Abdul", email = "you@example.com" },
+]
+```
+
+The email must be real: it receives the invitation, and later any password
+reset. Drop `password_hash`, which Terraform will reject on this path rather
+than leave a secret sitting there with nothing reading it.
+
+What happens on the next apply: the pool is created, each viewer is invited, and
+**the old password stops working**. Your first sign-in then walks three steps,
+because Terraform can declare an account but cannot enrol a phone for it.
+
+1. Sign in with the username and the temporary password from the email.
+2. Choose a real password. Minimum 12 characters, mixed case, a digit, a symbol.
+3. Enrol an authenticator app, either from the enrolment link or by typing the
+   setup key, and confirm with a six-digit code.
+
+After that it is username, password, code. To add a viewer later, add them to
+`users` and apply; they get the same three steps.
+
+### Getting back in if you are locked out
+
+The pool is yours, so nothing here is unrecoverable:
+
+```bash
+# Forgotten password, when email works: use the reset link on the sign-in page.
+# Lost the authenticator app:
+aws cognito-idp admin-set-user-mfa-preference \
+  --user-pool-id "$(terraform output -raw cognito_user_pool_id)" \
+  --username Abdul --software-token-mfa-settings Enabled=false
+```
+
+That clears the enrolled factor, so the next sign-in offers setup again.
+
+---
+
 ## Two front ends, one variable
 
 `edge` decides what sits in front of the app. Everything else in the stack is

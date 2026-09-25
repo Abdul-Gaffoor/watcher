@@ -167,6 +167,25 @@ e2e/          Browser smoke test
 docs/         Architecture notes, security notes, roadmap
 ```
 
+## Accounts and MFA
+
+Viewer credentials can live in either of two places, chosen by `auth_provider`
+in `deploy-aws/terraform.tfvars`.
+
+`cognito` is the one to be on: a managed user pool with **required MFA**, a
+password policy, lockout that survives scale-out, and self-service password
+reset. Terraform declares who may sign in and Cognito emails each invitee a
+temporary password, so no password or hash is stored in this repository or in
+Terraform state. First sign-in walks the viewer through choosing a password and
+enrolling an authenticator app, because Terraform can create an account but
+cannot enrol a phone for it.
+
+`roster` is the original scrypt list. It stays because the dev server and the
+end-to-end suite must work with no AWS account.
+
+Switching, and recovering from a lost authenticator, are both in
+[deploy-aws/README.md](deploy-aws/README.md).
+
 ## Security notes
 
 `.secrets/` is gitignored and must stay that way — the private signing key mints

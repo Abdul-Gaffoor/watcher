@@ -16,10 +16,12 @@ pain usually shows up.
 
 ## 2. Accounts
 
-- **Cognito** for sign-up, password reset, MFA and account lockout. The
-  `/api/login` contract is already the shape Cognito's hosted flow returns, so
-  the SPA changes little; the Lambda keeps issuing the CloudFront cookies after
-  validating a Cognito token.
+- ~~**Cognito** for sign-up, password reset, MFA and account lockout.~~ **Done**,
+  as `auth_provider = "cognito"`. Required MFA made sign-in multi-step, so the
+  login page is now a four-step flow: credentials, then whichever challenge the
+  pool raises. What is still open on top of it: a QR code on the enrolment
+  screen rather than a key to transcribe, recovery codes for a lost phone, and
+  Cognito groups wired to the per-genre entitlements below.
 - **Server-side watch history**, so resume points follow a viewer across
   devices. `lib/progress.ts` is the only module that changes.
 - **Roles and entitlements** — e.g. a trading-only tier that cannot see cinema.

@@ -68,3 +68,18 @@ output "certificate_arn" {
   description = "Certificate serving the custom domain. Null when the distribution uses its default *.cloudfront.net certificate."
   value       = local.certificate_arn
 }
+
+output "auth_provider" {
+  description = "Where viewer credentials live: roster or cognito."
+  value       = var.auth_provider
+}
+
+output "cognito_user_pool_id" {
+  description = "The user pool, for adding viewers or resetting one by hand. Empty on the roster path."
+  value       = try(aws_cognito_user_pool.this[0].id, "")
+}
+
+output "cognito_client_id" {
+  description = "The app client the auth Lambda authenticates against. Not a secret."
+  value       = try(aws_cognito_user_pool_client.web[0].id, "")
+}

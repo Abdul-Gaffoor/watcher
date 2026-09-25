@@ -1,6 +1,14 @@
 import { authenticate, getConfig } from './config.mjs';
 import { createSignedCookies } from './cloudfront.mjs';
 import { signJwt, verifyJwt } from './crypto-utils.mjs';
+import {
+  beginLogin,
+  describeCognitoError,
+  readChallengeToken,
+  submitMfaCode,
+  submitNewPassword,
+  verifyMfaSetup,
+} from './auth-flow.mjs';
 
 const SESSION_COOKIE = 'watcher_session';
 const CF_COOKIES = ['CloudFront-Policy', 'CloudFront-Signature', 'CloudFront-Key-Pair-Id'];
@@ -121,6 +129,61 @@ function parseBody(event) {
   }
 }
 
+/**
+ * The Cognito steps after the password, keyed by path. Each names the challenge
+ * it answers, so a token from one step cannot be replayed into another.
+ */
+const CHALLENGE_ROUTES = new Map([
+  [
+    '/api/login/new-password',
+    {
+      expects: 'NEW_PASSWORD_REQUIRED',
+      run: ({ config, challenge, body }) =>
+        submitNewPassword({ config, challenge, password: String(body.password ?? '') }),
+    },
+  ],
+  [
+    '/api/login/mfa-setup',
+    {
+      expects: 'MFA_SETUP',
+      run: ({ config, challenge, body }) =>
+        verifyMfaSetup({ config, challenge, code: String(body.code ?? '').trim() }),
+    },
+  ],
+  [
+    '/api/login/mfa',
+    {
+      expects: 'SOFTWARE_TOKEN_MFA',
+      run: ({ config, challenge, body }) =>
+        submitMfaCode({ config, challenge, code: String(body.code ?? '').trim() }),
+    },
+  ],
+]);
+
+/**
+ * Runs one step and turns its outcome into a response. A step that finishes the
+ * sign-in gets cookies; one that raises another challenge gets the token for it
+ * and nothing else. Only a genuine credential rejection counts against the
+ * throttle, so mistyping a new password does not lock anyone out.
+ */
+async function runFlow(throttleKey, step) {
+  try {
+    const outcome = await step();
+
+    if (outcome.status === 'authenticated') {
+      const session = issueSession(outcome.user);
+      return json(200, { status: 'authenticated', ...session.body }, session.cookies);
+    }
+
+    return json(200, outcome);
+  } catch (error) {
+    const described = describeCognitoError(error);
+    if (!described) throw error;
+    if (described.status === 401) recordFailure(throttleKey);
+    return json(described.status, { error: described.message });
+  }
+}
+
 export async function handler(event) {
   const method = event.requestContext?.http?.method ?? 'GET';
   const path = (event.rawPath ?? '/').replace(/\/+$/, '') || '/';
@@ -135,6 +198,14 @@ export async function handler(event) {
         return json(429, { error: 'Too many sign-in attempts. Try again later.' });
       }
 
+      const config = getConfig();
+
+      if (config.usesCognito) {
+        return await runFlow(throttleKey, () =>
+          beginLogin({ config, username: String(username ?? ''), password: String(password ?? '') }),
+        );
+      }
+
       const user = authenticate(username, password);
       if (!user) {
         recordFailure(throttleKey);
@@ -142,7 +213,33 @@ export async function handler(event) {
       }
 
       const session = issueSession(user);
-      return json(200, session.body, session.cookies);
+      return json(200, { status: 'authenticated', ...session.body }, session.cookies);
+    }
+
+    // The remaining steps of a Cognito sign-in. Each takes the challenge token
+    // the previous step handed back, so none of them can be reached cold.
+    if (method === 'POST' && CHALLENGE_ROUTES.has(path)) {
+      const config = getConfig();
+      if (!config.usesCognito) return json(404, { error: 'Not found' });
+
+      const body = parseBody(event);
+      const challenge = readChallengeToken(body.challengeToken, config.sessionSecret);
+      if (!challenge) {
+        return json(401, { error: 'That sign-in attempt expired. Start again.' });
+      }
+
+      const sourceIp = event.requestContext?.http?.sourceIp ?? 'unknown';
+      const throttleKey = `${sourceIp}:${challenge.username.toLowerCase()}`;
+      if (tooManyAttempts(throttleKey)) {
+        return json(429, { error: 'Too many sign-in attempts. Try again later.' });
+      }
+
+      const step = CHALLENGE_ROUTES.get(path);
+      if (challenge.challengeName !== step.expects) {
+        return json(409, { error: 'That step does not apply to this sign-in.' });
+      }
+
+      return await runFlow(throttleKey, () => step.run({ config, challenge, body }));
     }
 
     if (method === 'GET' && path === '/api/session') {
@@ -151,14 +248,14 @@ export async function handler(event) {
       // Reissuing here means a returning viewer with a valid session always
       // lands on the catalog with working media cookies.
       const session = issueSession(user);
-      return json(200, session.body, session.cookies);
+      return json(200, { status: 'authenticated', ...session.body }, session.cookies);
     }
 
     if (method === 'POST' && path === '/api/refresh') {
       const user = currentUser(event);
       if (!user) return json(401, { error: 'Not signed in.' });
       const session = issueSession(user);
-      return json(200, session.body, session.cookies);
+      return json(200, { status: 'authenticated', ...session.body }, session.cookies);
     }
 
     if (method === 'POST' && path === '/api/logout') {

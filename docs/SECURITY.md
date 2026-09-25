@@ -41,9 +41,15 @@ What the MVP does, and what to change before it takes real public traffic.
    attacker but resets on scale-out. Put AWS WAF in front of the distribution
    with a rate-based rule on `/api/login`.
 
-4. **No account lockout, MFA, or password rotation.** The roster is a JSON blob
-   redeployed by hand. Move to Cognito (or a user table) once there are more
-   than a handful of viewers.
+4. **No account lockout, MFA, or password rotation — on the roster path.**
+   `auth_provider = "cognito"` closes this one. A user pool brings required MFA,
+   lockout that survives scale-out, a password policy, and self-service reset,
+   and it takes password material out of this repository entirely: Terraform
+   declares who may sign in, and Cognito emails each invitee a temporary
+   password. The roster remains only because the local dev server and the
+   end-to-end suite must work with no AWS account. Gaps 1 and 3 shrink to
+   nothing on the Cognito path, since there is no roster in the Lambda's
+   environment and lockout is no longer per-container.
 
 5. **Presigned URLs are bearer credentials, and they live in a URL.** This
    applies only to `edge = "apigateway"`. A signed cookie is `HttpOnly` and
@@ -77,6 +83,27 @@ What the MVP does, and what to change before it takes real public traffic.
 10. **Buckets carry `prevent_destroy`.** `terraform destroy` refuses to take
    them — deliberate, so a mistake cannot delete your content library, but it
    does mean removing the lifecycle block if you genuinely want them gone.
+
+## What Cognito is and is not doing
+
+On `auth_provider = "cognito"` the Lambda never sees a stored password. It
+forwards the submitted credentials to Cognito, which decides, and then issues
+its own session cookie from the result.
+
+Two details worth knowing:
+
+- **Tokens are not signature-verified.** They arrive in the body of a TLS
+  response from Cognito, in the same request that asked for them, so there is no
+  third party to distrust and no JWKS to fetch. A token read from a client would
+  need verifying; one read from the response to your own `InitiateAuth` does not.
+- **The challenge token is a bearer credential.** Between the password step and
+  the code step, the browser holds a short-lived JWT signed with the session
+  secret, carrying Cognito's session. Signing it stops a viewer rewriting which
+  account they are half-way through authenticating as. It expires in 15 minutes,
+  and it is useless without also passing the second factor.
+- **The app client has no secret.** Every Cognito call the Lambda makes is one a
+  signed-out user may make, so a secret would be one more thing to store for no
+  gain. What bounds the danger is the pool policy, not the client id.
 
 ## Handling the signing key
 

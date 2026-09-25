@@ -45,6 +45,25 @@ export interface SessionUser {
 
 export interface Session {
   user: SessionUser;
-  /** Epoch seconds at which the CloudFront signed cookies stop working. */
+  /** Epoch seconds at which media access stops working. */
   mediaAccessExpiresAt: number;
 }
+
+/**
+ * Sign-in is a short conversation rather than one request, because the user
+ * pool requires a second factor. Every step answers with one of these, and the
+ * only one that carries a session is the last.
+ */
+export type LoginOutcome =
+  | ({ status: 'authenticated' } & Session)
+  /** An invited account still holding the temporary password it was emailed. */
+  | { status: 'new_password_required'; challengeToken: string }
+  /** No authenticator app enrolled yet; these are what it needs to enrol. */
+  | {
+      status: 'mfa_setup_required';
+      challengeToken: string;
+      secretCode: string;
+      otpauthUri: string;
+    }
+  /** Enrolled, and owes a code. */
+  | { status: 'mfa_required'; challengeToken: string };

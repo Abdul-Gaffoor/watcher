@@ -28,6 +28,12 @@ price_class = "PriceClass_100"
 # is verified; the distribution is the only resource that has to be created.
 edge = "apigateway"
 
+# Left on the roster because switching to Cognito needs a real email address in
+# terraform.tfvars for the invitation, and because the switch invalidates the
+# current password. Set this to "cognito" in terraform.tfvars, which loads
+# first, or here, once that email is filled in.
+auth_provider = "roster"
+
 domain_name     = "watcher.moderndayjourney.me"
 route53_zone_id = "Z063013830JENA0YBKB28"
 
