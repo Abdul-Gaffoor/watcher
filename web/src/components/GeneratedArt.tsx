@@ -52,8 +52,12 @@ interface Props {
   /** The id, not the name: artwork must not change when a title is renamed. */
   seed: string;
   label: string;
-  /** Landscape for a shelf tile, wider and flatter behind the billboard. */
-  variant?: 'tile' | 'backdrop';
+  /**
+   * tile     carries the name, for a shelf where nothing else does
+   * plain    the same artwork without it, for a list that prints the name beside
+   * backdrop behind a billboard, where the page's own headline is the name
+   */
+  variant?: 'tile' | 'plain' | 'backdrop';
 }
 
 export function GeneratedArt({ seed, label, variant = 'tile' }: Props) {
@@ -67,8 +71,7 @@ export function GeneratedArt({ seed, label, variant = 'tile' }: Props) {
   const angle = 20 + ((hash >> 8) % 50);
 
   const id = `art-${seed.replace(/[^a-z0-9]/gi, '')}-${variant}`;
-  const backdrop = variant === 'backdrop';
-  const lines = backdrop ? [] : wrap(label, 14);
+  const lines = variant === 'tile' ? wrap(label, 14) : [];
 
   return (
     <svg

@@ -174,12 +174,14 @@ try {
     await page.click('.row__more[href="/c/gaurdeer-mentorship"]');
     await page.waitForURL(/\/c\/gaurdeer-mentorship$/);
 
-    await page.waitForSelector('.grid .card');
-    const titles = await page.$$eval('.grid .card__title', (els) => els.map((el) => el.textContent));
+    // A collection holding videos rather than more collections is a course, so
+    // the bottom of the tree is a syllabus: numbered, in order, not a grid.
+    await page.waitForSelector('.syllabus__link');
+    const titles = await page.$$eval('.syllabus__name', (els) => els.map((el) => el.textContent));
     assert.deepEqual(titles.sort(), ['Market Structure and Liquidity', 'Order Blocks and Fair Value Gaps']);
 
-    // The breadcrumb has to offer the way back up, or a deep shelf is a dead end.
-    const crumbs = await page.$$eval('.breadcrumb a', (els) => els.map((el) => el.textContent));
+    // The trail has to offer the way back up, or a deep shelf is a dead end.
+    const crumbs = await page.$$eval('.course__trail a', (els) => els.map((el) => el.textContent));
     assert.deepEqual(crumbs, ['Home', 'Trading', 'SMC']);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/02-genre.png` });
   });
@@ -266,7 +268,7 @@ try {
 
   await step('a missing manifest shows an in-player error instead of crashing', async () => {
     await page.waitForSelector('.player__error', { timeout: 10_000 });
-    await page.waitForSelector('.watch__title');
+    await page.waitForSelector('.theatre__title');
   });
 
   await step('an unknown title id degrades gracefully', async () => {
@@ -375,6 +377,72 @@ try {
     // A poster frame grabbed from a video is 16:9; cropping it to a portrait
     // poster throws away most of the frame.
     assert.ok(Math.abs(ratio - 16 / 9) < 0.05, `card art ratio was ${ratio.toFixed(3)}`);
+  });
+
+  // ------------------------------------------------- course and theatre --
+
+  await step('a course reads as a syllabus, numbered and in order', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${BASE}/c/gaurdeer-mentorship`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.syllabus__link');
+
+    const numbers = await page.$$eval('.syllabus__number', (els) =>
+      els.map((el) => el.textContent.trim()),
+    );
+    assert.deepEqual(numbers, ['01', '02'], 'lessons are numbered in catalog order');
+
+    // The primary button names the lesson it will actually open, so it is
+    // never a guess about where you left off.
+    const button = page.locator('.course__actions a').first();
+    assert.match(await button.textContent(), /Start the course/);
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/06-course.png` });
+  });
+
+  await step('the theatre says which lesson this is and offers the rest', async () => {
+    await page.click('.syllabus__link');
+    await page.waitForSelector('.theatre__title');
+
+    assert.match(await page.textContent('.theatre__position'), /Lesson 1 of 2/);
+
+    // The whole course is beside the player, so choosing the next one never
+    // means going back to a listing.
+    const railed = await page.$$eval('.rail-item__name', (els) => els.length);
+    assert.equal(railed, 2);
+    assert.equal(await page.locator('.rail-item.is-current').count(), 1);
+
+    // Native controls would be the browser's chrome, not the product's.
+    assert.equal(await page.locator('video[controls]').count(), 0);
+    await page.waitForSelector('.pc__bar');
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/07-theatre.png` });
+  });
+
+  await step('the rail moves between lessons and the position follows', async () => {
+    await page.click('.rail-item:not(.is-current)');
+    await page.waitForFunction(
+      () => document.querySelector('.theatre__position')?.textContent.includes('Lesson 2 of 2'),
+      undefined,
+      { timeout: 15_000 },
+    );
+    // The last lesson has nothing after it, so no Next is offered.
+    assert.equal(await page.locator('.theatre__steps a:has-text("Next")').count(), 0);
+  });
+
+  await step('finishing a lesson ticks it off the syllabus', async () => {
+    // Completion has to survive as a fact. Deleting the entry on ended -- which
+    // is what used to happen -- cannot tell "watched" from "never opened".
+    await page.evaluate(() => {
+      const raw = JSON.parse(localStorage.getItem('watcher.progress.v1') ?? '{}');
+      raw['smc-market-structure'] = {
+        positionSec: 600, durationSec: 600, updatedAt: Date.now(), completed: true,
+      };
+      localStorage.setItem('watcher.progress.v1', JSON.stringify(raw));
+    });
+
+    await page.goto(`${BASE}/c/gaurdeer-mentorship`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.syllabus__link');
+
+    assert.equal(await page.locator('.syllabus__row.is-done').count(), 1);
+    assert.match(await page.textContent('.course__progress-label'), /1 of 2 complete/);
   });
 
   // --------------------------------------------------- the dashboard ----

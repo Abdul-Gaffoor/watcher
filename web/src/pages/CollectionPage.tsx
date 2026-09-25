@@ -2,7 +2,9 @@ import { Link, useParams } from 'react-router-dom';
 import { Spinner } from '../components/Spinner';
 import { TitleCard } from '../components/TitleCard';
 import { TitleRow } from '../components/TitleRow';
+import { CourseView } from '../components/CourseView';
 import { useCatalog } from '../lib/CatalogProvider';
+import { isCourse } from '../lib/course';
 
 /**
  * One shelf, at any depth. A collection with children shows them as rows, and
@@ -36,6 +38,13 @@ export function CollectionPage() {
   const children = childrenOf(collection.id);
   const ownTitles = titlesDirectlyIn(collection.id);
   const trail = pathTo(collection.id).slice(0, -1);
+
+  // A collection holding videos rather than more collections is a course, and
+  // a course is an ordered thing with a position in it. A grid of tiles cannot
+  // say which lesson is next, so it gets a syllabus instead.
+  if (isCourse(children, ownTitles)) {
+    return <CourseView collection={collection} titles={ownTitles} trail={trail} />;
+  }
 
   return (
     <main className="page">
