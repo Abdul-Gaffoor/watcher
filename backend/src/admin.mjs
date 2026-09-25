@@ -3,6 +3,7 @@ import {
   ID_PATTERN,
   isOwnedMediaKey,
   migrateFromV1,
+  posterKeyFor,
   sourceKeyFor,
   validateCatalog,
 } from './catalog.mjs';
@@ -203,6 +204,31 @@ export function signUpload(config, body) {
         region,
         credentials,
         extraQuery: { uploads: '' },
+        expiresIn: UPLOAD_URL_TTL,
+      }),
+    };
+  }
+
+  if (op === 'poster') {
+    // One PUT, not a multipart exchange: a poster is a couple of hundred
+    // kilobytes, and the five-megabyte minimum part size makes multipart
+    // actively wrong for it.
+    const titleId = String(body.titleId ?? '');
+    if (!ID_PATTERN.test(titleId)) {
+      throw new AdminError('That title id must be lowercase letters, digits and hyphens.');
+    }
+
+    const key = posterKeyFor(titleId);
+    return {
+      key,
+      contentType: 'image/jpeg',
+      mediaPath: `/${key}`,
+      url: presignS3({
+        method: 'PUT',
+        bucket,
+        key,
+        region,
+        credentials,
         expiresIn: UPLOAD_URL_TTL,
       }),
     };

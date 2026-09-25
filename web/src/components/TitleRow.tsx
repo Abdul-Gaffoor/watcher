@@ -19,10 +19,19 @@ export function TitleRow({ heading, titles, moreHref, emptyHint }: TitleRowProps
    * only thing telling a viewer there is more.
    */
   const [scrolled, setScrolled] = useState(0);
+  /**
+   * Whether the shelf actually runs off the edge. A course with two lessons in
+   * it does not, and paging arrows over a row that cannot move -- plus a
+   * scroll indicator that never travels -- are controls that lie about how
+   * much is there.
+   */
+  const [overflows, setOverflows] = useState(false);
+
   const measure = useCallback(() => {
     const element = scroller.current;
     if (!element) return;
     const travel = element.scrollWidth - element.clientWidth;
+    setOverflows(travel > 4);
     setScrolled(travel > 4 ? element.scrollLeft / travel : 0);
   }, []);
 
@@ -62,30 +71,43 @@ export function TitleRow({ heading, titles, moreHref, emptyHint }: TitleRowProps
         <p className="row__empty">{emptyHint}</p>
       ) : (
         <>
-          <button
-            type="button"
-            className="row__arrow row__arrow--start"
-            aria-label={`Scroll ${heading} left`}
-            onClick={() => page(-1)}
-          >
-            <span aria-hidden="true">‹</span>
-          </button>
+          {overflows && (
+            <button
+              type="button"
+              className="row__arrow row__arrow--start"
+              aria-label={`Scroll ${heading} left`}
+              onClick={() => page(-1)}
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+          )}
+
+          {/* Always a scroller, whatever is in it. Switching it to a wrapping
+              layout when the contents fit would make scrollWidth equal
+              clientWidth by construction, so a row could never be measured as
+              overflowing again and a long shelf would silently lose its
+              paging. Only the chrome above and below reacts to the count. */}
           <div className="row__scroller" ref={scroller} onScroll={measure}>
             {titles.map((title) => (
               <TitleCard key={title.id} title={title} />
             ))}
           </div>
-          <button
-            type="button"
-            className="row__arrow row__arrow--end"
-            aria-label={`Scroll ${heading} right`}
-            onClick={() => page(1)}
-          >
-            <span aria-hidden="true">›</span>
-          </button>
-          <span className="row__track" aria-hidden="true">
-            <span className="row__track-thumb" style={{ left: `${scrolled * 60}%` }} />
-          </span>
+
+          {overflows && (
+            <>
+              <button
+                type="button"
+                className="row__arrow row__arrow--end"
+                aria-label={`Scroll ${heading} right`}
+                onClick={() => page(1)}
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+              <span className="row__track" aria-hidden="true">
+                <span className="row__track-thumb" style={{ left: `${scrolled * 60}%` }} />
+              </span>
+            </>
+          )}
         </>
       )}
     </section>

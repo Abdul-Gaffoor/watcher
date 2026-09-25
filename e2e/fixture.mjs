@@ -7,6 +7,13 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 export const FIXTURE_TITLE_ID = 'night-shift';
+
+/**
+ * Stripped of its artwork, to stand for a freshly uploaded lesson: the poster
+ * frame is taken in the browser at upload time, and anything uploaded before
+ * that existed -- or in a browser that could not decode the codec -- has none.
+ */
+export const FIXTURE_UNILLUSTRATED_ID = 'signal-and-noise';
 const FIXTURE_DIR_NAME = '_e2e';
 
 /** Records an 8-second canvas animation as WebM using the browser itself. */
@@ -65,6 +72,11 @@ export async function buildFixtures(browser, repoRoot, scratchDir) {
   const title = catalog.titles.find((entry) => entry.id === FIXTURE_TITLE_ID);
   if (!title) throw new Error(`Fixture title "${FIXTURE_TITLE_ID}" is missing from the catalog`);
   title.sources = { mp4: `/media/${FIXTURE_DIR_NAME}/clip.webm` };
+
+  const bare = catalog.titles.find((entry) => entry.id === FIXTURE_UNILLUSTRATED_ID);
+  if (!bare) throw new Error(`Fixture title "${FIXTURE_UNILLUSTRATED_ID}" is missing from the catalog`);
+  delete bare.poster;
+  delete bare.backdrop;
 
   const catalogPath = resolve(scratchDir, 'catalog.e2e.json');
   await writeFile(catalogPath, JSON.stringify(catalog, null, 2));

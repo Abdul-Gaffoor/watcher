@@ -149,6 +149,16 @@ export function sourceKeyFor(titleId, extension) {
   return `media/titles/${titleId}/source.${extension}`;
 }
 
+/**
+ * Artwork sits beside the video it was taken from, so deleting a title's
+ * folder takes both and nothing is orphaned. One fixed name, because a title
+ * has exactly one poster and re-uploading should replace it rather than
+ * accumulate.
+ */
+export function posterKeyFor(titleId) {
+  return `media/titles/${titleId}/poster.jpg`;
+}
+
 /** Guards a key handed back by a client mid-upload. */
 export function isOwnedMediaKey(key) {
   const match = /^media\/titles\/([a-z0-9-]+)\/[a-z0-9._-]+$/.exec(String(key ?? ''));

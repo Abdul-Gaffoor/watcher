@@ -69,6 +69,10 @@ export function Header() {
         </button>
       </aside>
 
+      {/* Content scrolls under the floating search, so it fades out rather
+          than sliding under an unexplained pill. */}
+      <div className="top-scrim" aria-hidden="true" />
+
       {/* Floating rather than docked, so the artwork runs to the top of the
           window and the search sits on it like a control, not a chrome bar. */}
       <form

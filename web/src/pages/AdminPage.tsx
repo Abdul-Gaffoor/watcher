@@ -3,7 +3,8 @@ import { Navigate } from 'react-router-dom';
 import { Spinner } from '../components/Spinner';
 import { useAuth } from '../auth/AuthProvider';
 import { adminApi } from '../lib/api';
-import { uploadVideo } from '../lib/uploads';
+import { capturePoster } from '../lib/poster';
+import { uploadPoster, uploadVideo } from '../lib/uploads';
 import type { Catalog, Collection, Title } from '../lib/types';
 
 /**
@@ -195,21 +196,35 @@ export function AdminPage() {
     setNotice(null);
     setProgress(0);
     try {
+      // Before the upload, because the file is already here and the same pass
+      // reads the duration off it — which is otherwise a number somebody has
+      // to type, and therefore a number that stays zero.
+      setNotice('Taking a poster frame…');
+      const captured = await capturePoster(file);
+
+      setNotice(null);
       const { promise } = uploadVideo(file, id, setProgress);
       const { mediaPath } = await promise;
+
+      const poster = captured ? await uploadPoster(id, captured.blob) : null;
 
       const title: Title = {
         id,
         title: name,
         collectionId: videoCollection,
-        durationSec: 0,
+        durationSec: captured?.durationSec ?? 0,
         sources: { mp4: mediaPath },
+        ...(poster ? { poster, backdrop: poster } : {}),
       };
       await save({ titles: [...catalog.titles, title] });
 
       setFile(null);
       setVideoTitle('');
-      setNotice(`Uploaded “${name}”.`);
+      setNotice(
+        poster
+          ? `Uploaded “${name}”.`
+          : `Uploaded “${name}”. This browser could not decode a poster frame from it, so it will use generated artwork.`,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'The upload failed');
     } finally {

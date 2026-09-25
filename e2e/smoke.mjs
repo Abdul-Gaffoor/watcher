@@ -288,12 +288,55 @@ try {
     await page.fill('input[name="password"]', PASSWORD);
     await page.click('button[type="submit"]');
     await page.waitForSelector('.hero__title', { timeout: 15_000 });
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    assert.ok(overflow <= 1, `horizontal overflow of ${overflow}px`);
+    const { overflow, blame } = await page.evaluate(() => {
+      const limit = document.documentElement.clientWidth;
+      // Naming the element is the difference between a number to reproduce and
+      // a fix. Anything inside a horizontal scroller is meant to exceed it.
+      const blame = [...document.querySelectorAll('body *')]
+        .filter((el) => !el.closest('.row__scroller'))
+        .map((el) => ({ el, box: el.getBoundingClientRect() }))
+        .filter(({ box }) => box.width > 0 && box.right > limit + 1)
+        .sort((a, b) => b.box.right - a.box.right)
+        .slice(0, 3)
+        .map(({ el, box }) => `${el.tagName.toLowerCase()}.${el.classList[0] ?? ''} → ${Math.round(box.right)}px`);
+
+      return {
+        overflow: document.documentElement.scrollWidth - limit,
+        blame,
+      };
+    });
+    assert.ok(overflow <= 1, `horizontal overflow of ${overflow}px — ${blame.join(', ') || 'no element past the edge'}`);
     if (shotsDir) await page.screenshot({ path: `${shotsDir}/04-mobile.png` });
   });
+  await step('a title with no artwork gets generated art, not a letter', async () => {
+    // The old fallback was the title's first character on a flat panel, which
+    // turned a course of "Class - 1", "Class - 2" into a wall of identical
+    // tiles that could not be told apart without reading the caption.
+    await page.goto(`${BASE}/search?q=signal`, { waitUntil: 'networkidle' });
+    const card = page.locator('.card', { hasText: 'Signal' }).first();
+    await card.waitFor({ timeout: 15_000 });
+
+    const art = card.locator('svg.genart');
+    assert.equal(await art.count(), 1, 'a title without a poster should get generated artwork');
+    // It carries the name, which is what makes the tile readable at a glance.
+    assert.match(await art.getAttribute('aria-label'), /Signal/);
+
+    // And it is artwork, not a character: several drawn elements, not one glyph.
+    assert.ok((await art.locator('circle').count()) >= 5, 'the generated art should be drawn');
+  });
+
+  await step('artwork is the shape of a video frame', async () => {
+    await page.goto(BASE, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.card__art');
+    const ratio = await page.evaluate(() => {
+      const box = document.querySelector('.card__art').getBoundingClientRect();
+      return box.width / box.height;
+    });
+    // A poster frame grabbed from a video is 16:9; cropping it to a portrait
+    // poster throws away most of the frame.
+    assert.ok(Math.abs(ratio - 16 / 9) < 0.05, `card art ratio was ${ratio.toFixed(3)}`);
+  });
+
   // --------------------------------------------------- pairing a device --
   // Two contexts, because the whole point is that two devices are involved:
   // one that shows a code and never sees a password, and one that is already

@@ -308,8 +308,9 @@ img {
   margin: 0 calc(var(--gutter) * -1) 0 calc((var(--rail-width) + var(--gutter)) * -1);
   padding: 92px var(--gutter) 36px calc(var(--rail-width) + var(--gutter));
   /* Short enough that the first shelf peeks in at the bottom, which is what
-     invites the first scroll. */
-  min-height: min(62vh, 46vw);
+     invites the first scroll. An uploaded lesson has a name and little else,
+     so this cannot be tall enough for a synopsis that is usually absent. */
+  min-height: min(54vh, 40vw);
   overflow: hidden;
 }
 
@@ -500,7 +501,7 @@ img {
      edge, not redistribute itself to fit. */
   /* Portrait tiles, so more of the shelf is visible at once and the artwork
      is the poster rather than a crop of it. */
-  grid-auto-columns: clamp(124px, 11vw, 168px);
+  grid-auto-columns: clamp(210px, 19vw, 300px);
   gap: 14px;
   overflow-x: auto;
   scroll-behavior: smooth;
@@ -571,9 +572,9 @@ img {
 
 .grid {
   display: grid;
-  /* Larger than a shelf tile: a collection page is all posters, with no
+  /* Larger than a shelf tile: a collection page is all artwork, with no
      competing rows, so it can afford the bigger crop. */
-  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 14vw, 210px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(clamp(210px, 21vw, 310px), 1fr));
   gap: 26px 14px;
   padding: 24px 0;
 }
@@ -622,7 +623,10 @@ img {
 
 .card__art {
   position: relative;
-  aspect-ratio: 2 / 3;
+  /* The shape of the thing inside it. A poster frame taken from a video is
+     16:9, and cropping it to a portrait poster throws away most of the frame
+     and usually the part that identified it. */
+  aspect-ratio: 16 / 9;
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--bg-elevated);
@@ -1292,4 +1296,96 @@ img {
 .pair__input:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+
+/* ---------- Generated artwork ---------- */
+
+.genart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- Card affordances ---------- */
+
+/* Hidden until the tile is the one being considered: at rest it competes with
+   the artwork, and every tile having one says nothing about any of them. */
+.card__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #12141f;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.card__play svg {
+  width: 46px;
+  height: 46px;
+  padding: 13px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.card:hover .card__play,
+.card:focus-visible .card__play {
+  opacity: 1;
+}
+
+/* ---------- Hero, when the title is all there is ---------- */
+
+.hero__art--generated {
+  /* The generated panel is already a gradient, so it needs none of the
+     background-image plumbing the real artwork does. */
+  background: none;
+}
+
+.hero__art--generated .genart {
+  width: 100%;
+  height: 100%;
+}
+
+.hero__crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hero__crumbs a {
+  color: #cfd3e6;
+}
+
+.hero__crumbs a:hover {
+  color: var(--text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hero__crumb-sep {
+  margin-right: 8px;
+  color: var(--text-muted);
+}
+
+/* The search floats over whatever is scrolling past. Without this a row's
+   "See all" slides out from under an otherwise unexplained pill; the fade
+   makes the bar read as a layer the page passes beneath.
+ *
+ * Its own element rather than a pseudo-element on .searchbar: backdrop-filter
+ * makes that bar a containing block for fixed descendants, so a fixed scrim
+ * inside it is trapped in the pill instead of spanning the window. */
+.top-scrim {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 104px;
+  /* Translucent, not the page colour: this sits over the billboard artwork at
+     the top of the page as well as over scrolled rows, and an opaque band
+     would crop the artwork the hero exists to show. */
+  background: linear-gradient(to bottom, rgba(10, 12, 20, 0.82), transparent);
+  pointer-events: none;
+  z-index: 3;
 }

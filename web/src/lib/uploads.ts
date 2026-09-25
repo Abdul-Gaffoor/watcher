@@ -123,3 +123,26 @@ export function uploadVideo(
 
   return { promise: run(), cancel: () => controller.abort() };
 }
+
+/**
+ * The poster frame, as a single PUT. Small enough that multipart would be
+ * wrong for it — S3 requires five-megabyte parts, and this is a couple of
+ * hundred kilobytes.
+ *
+ * Returns null on failure rather than throwing: the video is already in the
+ * bucket by this point, and losing the whole upload over its thumbnail would
+ * be a poor trade.
+ */
+export async function uploadPoster(titleId: string, blob: Blob): Promise<string | null> {
+  try {
+    const signed = await adminApi.signUpload({ op: 'poster', titleId });
+    const response = await fetch(signed.url, {
+      method: 'PUT',
+      headers: { 'content-type': 'image/jpeg' },
+      body: blob,
+    });
+    return response.ok ? signed.mediaPath : null;
+  } catch {
+    return null;
+  }
+}

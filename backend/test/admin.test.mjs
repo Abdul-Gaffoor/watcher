@@ -144,6 +144,38 @@ test('begin derives the key rather than trusting the client', () => {
   assert.ok(signed.url.includes('X-Amz-Signature='));
 });
 
+test('a poster is signed as one PUT beside the video it came from', () => {
+  // Multipart would be wrong for a couple of hundred kilobytes: S3 requires
+  // five-megabyte parts.
+  const signed = signUpload(config, { op: 'poster', titleId: 'class-01' });
+
+  assert.equal(signed.key, 'media/titles/class-01/poster.jpg');
+  assert.equal(signed.mediaPath, '/media/titles/class-01/poster.jpg');
+  assert.equal(signed.contentType, 'image/jpeg');
+  assert.ok(signed.url.includes('X-Amz-Signature='));
+  // A single PUT carries no upload id and no part number.
+  assert.equal(signed.url.includes('uploadId='), false);
+  assert.equal(signed.url.includes('partNumber='), false);
+});
+
+test('a poster key is derived, never taken from the request', () => {
+  for (const titleId of ['../etc', 'Class 01', 'a/b', '']) {
+    assert.throws(
+      () => signUpload(config, { op: 'poster', titleId }),
+      AdminError,
+      `expected ${titleId} to be refused`,
+    );
+  }
+
+  // A key smuggled alongside a valid id is ignored rather than honoured.
+  const signed = signUpload(config, {
+    op: 'poster',
+    titleId: 'class-01',
+    key: 'media/catalog.json',
+  });
+  assert.equal(signed.key, 'media/titles/class-01/poster.jpg');
+});
+
 test('a title id that could escape the layout is refused', () => {
   for (const titleId of ['../etc', 'Class 01', 'a/b', '']) {
     assert.throws(
