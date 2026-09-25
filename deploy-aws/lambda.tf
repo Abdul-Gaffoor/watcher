@@ -56,6 +56,27 @@ data "aws_iam_policy_document" "api_media_admin" {
   }
 }
 
+# Read of the one secret, and nothing else. Scoped to the ARN rather than "*"
+# so this role cannot read any other secret in the account.
+data "aws_iam_policy_document" "api_roster" {
+  count = local.use_cognito ? 0 : 1
+
+  statement {
+    sid       = "ReadTheViewerRoster"
+    effect    = "Allow"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = [aws_secretsmanager_secret.users[0].arn]
+  }
+}
+
+resource "aws_iam_role_policy" "api_roster" {
+  count = local.use_cognito ? 0 : 1
+
+  name   = "${local.name_prefix}-api-roster"
+  role   = aws_iam_role.api.id
+  policy = data.aws_iam_policy_document.api_roster[0].json
+}
+
 resource "aws_iam_role_policy" "api_media_admin" {
   name   = "${local.name_prefix}-api-media"
   role   = aws_iam_role.api.id
@@ -105,7 +126,15 @@ resource "aws_lambda_function" "api" {
       COGNITO_REGION       = var.aws_region
       COGNITO_ISSUER_LABEL = var.project_name
       } : {
-      USERS_JSON = local.users_json
+      # The roster is fetched at sign-in rather than passed in, so it is not
+      # readable from the function's configuration and can be rotated without
+      # touching this deployment at all.
+      # one() rather than [0]: a conditional evaluates both branches, so
+      # indexing a count-zero resource here fails on the Cognito path even
+      # though that branch is the one selected.
+      USERS_SECRET_ID     = one(aws_secretsmanager_secret.users[*].id)
+      USERS_SECRET_REGION = var.aws_region
+      ROSTER_TTL_SECONDS  = tostring(var.roster_ttl_seconds)
       }, local.use_cloudfront ? {
       # The signer is configured as a set or not at all. Absent, the handler
       # stops issuing cookies no edge would verify and media is gated by the
@@ -119,6 +148,9 @@ resource "aws_lambda_function" "api" {
   depends_on = [
     aws_iam_role_policy_attachment.api_basic_execution,
     aws_cloudwatch_log_group.api,
+    # The first sign-in after a deploy must not race the seed: without this the
+    # function can be live while the secret has no version yet.
+    aws_secretsmanager_secret_version.users,
   ]
 }
 

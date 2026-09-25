@@ -1,7 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
 
 /**
- * Minimal AWS Signature Version 4 query-string presigning for S3 GETs.
+ * Minimal AWS Signature Version 4: query-string presigning for S3, and
+ * Authorization-header signing for the JSON APIs.
  *
  * Written against node:crypto for the same reason the JWT and the CloudFront
  * policy signature are: this Lambda ships with no dependencies, so there is no
@@ -49,12 +50,24 @@ function sha256Hex(value) {
   return createHash('sha256').update(value, 'utf8').digest('hex');
 }
 
+/** Lowercase name, trimmed value, sorted — the canonical header form. */
+function canonicalizeHeaders(headers) {
+  const entries = Object.entries(headers)
+    .map(([name, value]) => [name.toLowerCase(), String(value).trim().replace(/\s+/g, ' ')])
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+
+  return {
+    canonical: entries.map(([name, value]) => `${name}:${value}`).join('\n'),
+    signed: entries.map(([name]) => name).join(';'),
+  };
+}
+
 /** The four-step derivation that scopes a key to one day, region and service. */
-function signingKey(secretAccessKey, dateStamp, region) {
+function signingKey(secretAccessKey, dateStamp, region, service = SERVICE) {
   const date = hmac(`AWS4${secretAccessKey}`, dateStamp);
   const regional = hmac(date, region);
-  const service = hmac(regional, SERVICE);
-  return hmac(service, 'aws4_request');
+  const scoped = hmac(regional, service);
+  return hmac(scoped, 'aws4_request');
 }
 
 /** `20260922T134501Z` and `20260922`, the two forms the signature needs. */
@@ -148,4 +161,55 @@ export function presignS3({
 /** The read case, which is most of the traffic and reads better named. */
 export function presignGetObject(options) {
   return presignS3({ ...options, method: 'GET' });
+}
+
+/**
+ * Signs a request with an Authorization header, which is what the JSON APIs
+ * take — Secrets Manager has no presigned form, so the roster fetch cannot
+ * reuse presignS3.
+ *
+ * Unlike the S3 presigner this hashes the body: a JSON API signs its payload,
+ * and UNSIGNED-PAYLOAD is an S3 concession to streaming uploads that nothing
+ * here needs.
+ *
+ * Returns the headers to send. The caller owns the fetch, so this stays
+ * testable without a network.
+ */
+export function signRequest({
+  method = 'POST',
+  host,
+  path = '/',
+  region,
+  service,
+  credentials,
+  headers = {},
+  body = '',
+  now = new Date(),
+}) {
+  const { accessKeyId, secretAccessKey, sessionToken } = credentials;
+  const { amzDate, dateStamp } = timestamps(now);
+  const scope = `${dateStamp}/${region}/${service}/aws4_request`;
+  const payloadHash = sha256Hex(body);
+
+  const allHeaders = {
+    ...headers,
+    host,
+    'x-amz-date': amzDate,
+    // Signed rather than merely sent: temporary credentials are rejected when
+    // the token is not covered by the signature.
+    ...(sessionToken ? { 'x-amz-security-token': sessionToken } : {}),
+  };
+
+  const { canonical, signed } = canonicalizeHeaders(allHeaders);
+
+  const canonicalRequest = [method, path, '', `${canonical}\n`, signed, payloadHash].join('\n');
+  const stringToSign = [ALGORITHM, amzDate, scope, sha256Hex(canonicalRequest)].join('\n');
+  const signature = createHmac('sha256', signingKey(secretAccessKey, dateStamp, region, service))
+    .update(stringToSign, 'utf8')
+    .digest('hex');
+
+  return {
+    ...allHeaders,
+    authorization: `${ALGORITHM} Credential=${accessKeyId}/${scope}, SignedHeaders=${signed}, Signature=${signature}`,
+  };
 }

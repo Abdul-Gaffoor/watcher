@@ -83,3 +83,16 @@ output "cognito_client_id" {
   description = "The app client the auth Lambda authenticates against. Not a secret."
   value       = try(aws_cognito_user_pool_client.web[0].id, "")
 }
+
+output "users_secret_id" {
+  value       = one(aws_secretsmanager_secret.users[*].id)
+  description = <<-DESC
+    The roster secret. Read the seeded password with:
+
+      aws secretsmanager get-secret-value --secret-id <this> \
+        --query SecretString --output text
+
+    Rotate by writing a new value back; it takes effect within
+    roster_ttl_seconds and survives the next apply.
+  DESC
+}

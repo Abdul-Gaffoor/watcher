@@ -5,7 +5,10 @@
  *   node scripts/hash-password.mjs 'correct horse battery staple'
  *   node scripts/hash-password.mjs            # prompts, nothing lands in shell history
  *
- * Paste the result into the `passwordHash` field of the USERS_JSON secret.
+ * Paste the result into the `passwordHash` field of an entry in the roster
+ * secret. Optional now: the roster also accepts a plaintext `password`, which
+ * the handler hashes on load, so this is for when you would rather not put one
+ * in the console. See backend/src/roster.mjs.
  */
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout, argv, exit } from 'node:process';

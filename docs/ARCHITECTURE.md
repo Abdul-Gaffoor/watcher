@@ -57,7 +57,7 @@ every time. It is a way to be live, not a way to serve video well, and
 
 ```
 POST /api/login
-  ├── scrypt-verify the password against USERS_JSON
+  ├── scrypt-verify against the roster in Secrets Manager (cached 60s)
   ├── sign an HS256 JWT  ──────────────▶  watcher_session   (HttpOnly, 12h)
   └── sign an RSA-SHA1 CloudFront policy ▶ CloudFront-Policy
                                            CloudFront-Signature   (HttpOnly, 1h)

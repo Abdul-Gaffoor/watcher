@@ -100,9 +100,12 @@ for the full walkthrough. In short:
 ```bash
 cd deploy-aws
 cp terraform.tfvars.example terraform.tfvars   # add viewers + your GitHub repo
-node ../scripts/hash-password.mjs              # once per viewer
 terraform init && terraform apply              # ~15 min (CloudFront)
 terraform output                               # the app URL and bucket names
+
+# The passwords Terraform generated, once:
+aws secretsmanager get-secret-value --secret-id watcher/users \
+  --query SecretString --output text
 ```
 
 That creates everything: the GitHub OIDC provider and deploy role, both private
@@ -226,13 +229,23 @@ Terraform state. First sign-in walks the viewer through choosing a password and
 enrolling an authenticator app, because Terraform can create an account but
 cannot enrol a phone for it.
 
-`roster` is the original scrypt list. It stays because the dev server and the
-end-to-end suite must work with no AWS account.
+`roster` is a list of viewers in a Secrets Manager secret. Terraform seeds it
+with a generated password each and then stops looking at the value, so rotating
+a password is editing that secret — no deploy, no commit, and the next
+`terraform apply` will not revert it. A change takes effect within a minute
+(`roster_ttl_seconds`). It stays as the default because the dev server and the
+end-to-end suite must work with no AWS account at all, and because it needs no
+verified email address.
 
 Switching, and recovering from a lost authenticator, are both in
 [deploy-aws/README.md](deploy-aws/README.md).
 
 ## Security notes
+
+No password or password hash is stored in this repository. The roster lives in
+Secrets Manager, encrypted with KMS and readable only by the Lambda's role and
+whoever you grant `secretsmanager:GetSecretValue` — not by anyone who can read
+the function's configuration, which is where it used to sit.
 
 `.secrets/` is gitignored and must stay that way — the private signing key mints
 media access for anyone holding it. For the MVP, secrets are passed to Lambda as

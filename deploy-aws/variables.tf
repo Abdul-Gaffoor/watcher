@@ -147,11 +147,17 @@ variable "users" {
     error_message = "At least one user is required, or nobody can sign in."
   }
 
+  # password_hash is optional now: with auth_provider = "roster" the secret is
+  # seeded with a generated password when one is absent, which is the whole
+  # reason there is no longer a hash in this repository. Supplying one still
+  # works, and it must still be a real hash rather than a plaintext password
+  # left here by mistake.
   validation {
-    condition = var.auth_provider != "roster" || alltrue([
-      for user in var.users : user.password_hash != null && startswith(coalesce(user.password_hash, ""), "scrypt$")
+    condition = alltrue([
+      for user in var.users :
+      user.password_hash == null || startswith(coalesce(user.password_hash, ""), "scrypt$")
     ])
-    error_message = "With auth_provider = \"roster\", every user needs a password_hash from scripts/hash-password.mjs."
+    error_message = "password_hash must come from scripts/hash-password.mjs, which produces a \"scrypt$...\" string. Never put a plaintext password here; to set one, rotate the secret in Secrets Manager instead."
   }
 
   validation {
@@ -171,6 +177,37 @@ variable "users" {
   validation {
     condition     = length(distinct([for user in var.users : lower(user.username)])) == length(var.users)
     error_message = "Usernames must be unique (they are matched case-insensitively)."
+  }
+}
+
+variable "users_secret_recovery_days" {
+  type        = number
+  default     = 0
+  description = <<-DESC
+    Days Secrets Manager keeps the roster after a destroy, during which its
+    name cannot be reused. 0 deletes immediately, which is what makes tearing
+    this stack down and standing it back up work. Raise it to 7-30 if losing
+    the roster to an accidental destroy would actually cost you something.
+  DESC
+
+  validation {
+    condition     = var.users_secret_recovery_days == 0 || (var.users_secret_recovery_days >= 7 && var.users_secret_recovery_days <= 30)
+    error_message = "Must be 0, or between 7 and 30 — AWS allows no window in between."
+  }
+}
+
+variable "roster_ttl_seconds" {
+  type        = number
+  default     = 60
+  description = <<-DESC
+    How long the handler caches the roster before re-reading the secret. This
+    is how soon a rotation takes effect. Shorter means faster rotation and more
+    Secrets Manager calls; a minute keeps a burst of sign-ins to one call.
+  DESC
+
+  validation {
+    condition     = var.roster_ttl_seconds >= 0 && var.roster_ttl_seconds <= 3600
+    error_message = "Must be between 0 and 3600 seconds."
   }
 }
 

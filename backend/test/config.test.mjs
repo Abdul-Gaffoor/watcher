@@ -9,7 +9,11 @@ let instance = 0;
 async function loadConfig(env) {
   const saved = { ...process.env };
   for (const key of Object.keys(process.env)) {
-    if (key.startsWith('COGNITO_') || key === 'USERS_JSON' || key === 'AWS_REGION') {
+    if (
+      key.startsWith('COGNITO_') ||
+      key.startsWith('USERS_') ||
+      key === 'AWS_REGION'
+    ) {
       delete process.env[key];
     }
   }
@@ -69,13 +73,57 @@ test('Cognito with no region at all is refused', async () => {
 });
 
 test('no directory at all is refused, since nobody could sign in', async () => {
-  await assert.rejects(() => loadConfig({ ...BASE }), /either COGNITO_\* or USERS_JSON/);
+  await assert.rejects(() => loadConfig({ ...BASE }), /Configure one of/);
 });
 
-test('both directories at once is refused, since neither would be authoritative', async () => {
+test('two directories at once is refused, since neither would be authoritative', async () => {
+  // Every pairing, because the ambiguity is the same whichever two are set:
+  // there is no rule for which password wins.
+  const pairs = [
+    { ...POOL, USERS_JSON: ROSTER },
+    { ...POOL, USERS_SECRET_ID: 'watcher/users' },
+    { USERS_JSON: ROSTER, USERS_SECRET_ID: 'watcher/users' },
+  ];
+
+  for (const pair of pairs) {
+    await assert.rejects(
+      () => loadConfig({ ...BASE, AWS_REGION: 'us-east-1', ...pair }),
+      /Configure only one of/,
+      `expected ${Object.keys(pair).join(' + ')} to be refused`,
+    );
+  }
+});
+
+test('the secret roster is a directory in its own right', async () => {
+  const config = await loadConfig({
+    ...BASE,
+    AWS_REGION: 'us-east-1',
+    USERS_SECRET_ID: 'watcher/users',
+  });
+
+  assert.equal(config.usersSecretId, 'watcher/users');
+  // Nothing is fetched at startup: the roster is read on the first sign-in, so
+  // a Secrets Manager outage cannot stop the function booting.
+  assert.equal(config.users.size, 0);
+  assert.equal(config.usersSecretRegion, 'us-east-1');
+  assert.equal(config.rosterTtlSeconds, 60);
+});
+
+test('the roster cache window is configurable', async () => {
+  const config = await loadConfig({
+    ...BASE,
+    AWS_REGION: 'us-east-1',
+    USERS_SECRET_ID: 'watcher/users',
+    ROSTER_TTL_SECONDS: '5',
+  });
+
+  assert.equal(config.rosterTtlSeconds, 5);
+});
+
+test('a secret with no region at all is refused', async () => {
   await assert.rejects(
-    () => loadConfig({ ...BASE, ...POOL, AWS_REGION: 'us-east-1', USERS_JSON: ROSTER }),
-    /not both/,
+    () => loadConfig({ ...BASE, USERS_SECRET_ID: 'watcher/users' }),
+    /USERS_SECRET_REGION/,
   );
 });
 

@@ -1,4 +1,4 @@
-import { verifyPassword } from './crypto-utils.mjs';
+import { authenticateAgainst, loadRoster, rosterFromArray } from './roster.mjs';
 
 function required(name) {
   const value = process.env[name];
@@ -12,29 +12,22 @@ function seconds(name, fallback) {
 }
 
 /**
- * Users are configured as JSON, which keeps the MVP self-contained. Passwords
- * are only ever stored as scrypt hashes — see scripts/hash-password.mjs.
- * Swap this for Cognito or a user table when the roster outgrows a handful.
+ * An inline roster, which is how the dev server and the test suite run: no
+ * AWS account, no secret to fetch, everything in one environment variable.
+ *
+ * Deployments use USERS_SECRET_ID instead, so the roster can be rotated
+ * without a deploy and is not sitting in plaintext on the function's
+ * configuration. See roster.mjs.
  */
 function loadUsers() {
-  // Absent when Cognito owns the directory. getConfig checks that one of the
-  // two is present, so an empty map here is never the whole story.
+  // Absent when Cognito or a secret owns the directory. getConfig checks that
+  // one of the three is present, so an empty map here is never the whole story.
   if (!process.env.USERS_JSON) return new Map();
   const parsed = JSON.parse(process.env.USERS_JSON);
   if (!Array.isArray(parsed) || parsed.length === 0) {
     throw new Error('USERS_JSON must be a non-empty array');
   }
-  return new Map(
-    parsed.map((user) => [
-      String(user.username).toLowerCase(),
-      {
-        username: user.username,
-        name: user.name ?? user.username,
-        roles: user.roles ?? ['viewer'],
-        passwordHash: user.passwordHash,
-      },
-    ]),
-  );
+  return rosterFromArray(parsed);
 }
 
 let cached;
@@ -64,6 +57,13 @@ export function getConfig() {
       cognitoClientId: process.env.COGNITO_CLIENT_ID || null,
       cognitoRegion: process.env.COGNITO_REGION || process.env.AWS_REGION || null,
       cognitoIssuerLabel: process.env.COGNITO_ISSUER_LABEL || 'Watcher',
+      // The roster as a rotatable secret. Preferred over USERS_JSON wherever
+      // there is an AWS account to hold it.
+      usersSecretId: process.env.USERS_SECRET_ID || null,
+      usersSecretRegion: process.env.USERS_SECRET_REGION || process.env.AWS_REGION || null,
+      // Short enough that a rotation takes effect while you are still looking
+      // at the console, long enough that a burst of sign-ins is one API call.
+      rosterTtlSeconds: seconds('ROSTER_TTL_SECONDS', 60),
       // Where the dashboard writes. Absent on the dev server, which has no
       // bucket, so the admin routes report themselves unavailable rather than
       // failing halfway through a write.
@@ -102,29 +102,48 @@ export function getConfig() {
       throw new Error('COGNITO_REGION (or AWS_REGION) is required when using Cognito');
     }
 
-    // Exactly one directory has to be in charge. Neither leaves nobody able to
-    // sign in; both would make it ambiguous which password is authoritative.
-    if (!cached.usesCognito && cached.users.size === 0) {
+    // Exactly one directory has to be in charge. None leaves nobody able to
+    // sign in; more than one would make it ambiguous which password is
+    // authoritative.
+    const directories = [
+      cached.usesCognito,
+      cached.users.size > 0,
+      Boolean(cached.usersSecretId),
+    ].filter(Boolean).length;
+
+    if (directories === 0) {
       cached = undefined;
-      throw new Error('Configure either COGNITO_* or USERS_JSON');
+      throw new Error('Configure one of COGNITO_*, USERS_SECRET_ID or USERS_JSON');
     }
-    if (cached.usesCognito && cached.users.size > 0) {
+    if (directories > 1) {
       cached = undefined;
-      throw new Error('Configure either COGNITO_* or USERS_JSON, not both');
+      throw new Error('Configure only one of COGNITO_*, USERS_SECRET_ID or USERS_JSON');
+    }
+    if (cached.usersSecretId && !cached.usersSecretRegion) {
+      cached = undefined;
+      throw new Error('USERS_SECRET_REGION (or AWS_REGION) is required with USERS_SECRET_ID');
     }
   }
   return cached;
 }
 
-export function authenticate(username, password) {
-  const { users } = getConfig();
-  const user = users.get(String(username ?? '').toLowerCase());
+/**
+ * Async because the roster may have to be fetched. It is cached in roster.mjs
+ * for a minute, so this is a network call on the first sign-in after a
+ * rotation and free for every one after that.
+ */
+export async function authenticate(username, password, options = {}) {
+  const config = getConfig();
+  const roster = config.usersSecretId
+    ? await loadRoster(
+        {
+          secretId: config.usersSecretId,
+          region: config.usersSecretRegion,
+          ttlSeconds: config.rosterTtlSeconds,
+        },
+        options,
+      )
+    : config.users;
 
-  // Always run a verification so a missing user and a wrong password take
-  // comparable time.
-  const hash = user?.passwordHash ?? 'scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
-  const ok = verifyPassword(String(password ?? ''), hash);
-
-  if (!user || !ok) return null;
-  return { username: user.username, name: user.name, roles: user.roles };
+  return authenticateAgainst(roster, username, password);
 }

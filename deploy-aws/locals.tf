@@ -21,6 +21,13 @@ locals {
   viewer_keys    = local.use_cognito ? nonsensitive([for user in var.users : lower(user.username)]) : []
   viewers_by_key = { for user in var.users : lower(user.username) => user }
 
+  # The same unwrapping, for the roster path: random_password needs one
+  # instance per user and the key becomes a resource address, so it cannot be
+  # sensitive. A username is not the secret part.
+  seed_keys = local.use_cognito ? {} : {
+    for key in nonsensitive([for user in var.users : lower(user.username)]) : key => key
+  }
+
   # Where viewers are told to sign in, which the invitation email needs.
   app_url = var.domain_name != null ? "https://${var.domain_name}" : "the address your administrator gave you"
 
@@ -76,13 +83,25 @@ locals {
     : var.domain_name == null ? "https://*/media/*" : "https://${var.domain_name}/media/*"
   )
 
-  # Shape the roster the way the Lambda expects, dropping nulls.
-  users_json = jsonencode([
-    for user in var.users : {
-      username     = user.username
-      name         = coalesce(user.name, user.username)
-      roles        = user.roles
-      passwordHash = user.password_hash
-    }
+  # What seeds the secret on the very first apply, and nothing after that.
+  #
+  # A generated plaintext password rather than a hash, because Terraform has no
+  # scrypt and because this is the shape a human edits when rotating. The
+  # handler hashes it on load and never keeps the plaintext; see roster.mjs for
+  # why that trade is a narrow one.
+  #
+  # An explicit password_hash in var.users still wins, so a roster you already
+  # have hashes for carries over unchanged.
+  users_seed_json = jsonencode([
+    for user in var.users : merge(
+      {
+        username = user.username
+        name     = coalesce(user.name, user.username)
+        roles    = user.roles
+      },
+      user.password_hash != null
+      ? { passwordHash = user.password_hash }
+      : { password = random_password.seed[lower(user.username)].result }
+    )
   ])
 }

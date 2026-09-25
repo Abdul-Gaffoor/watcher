@@ -207,7 +207,7 @@ export async function handler(event) {
         );
       }
 
-      const user = authenticate(username, password);
+      const user = await authenticate(username, password);
       if (!user) {
         recordFailure(throttleKey);
         return json(401, { error: 'Incorrect username or password.' });

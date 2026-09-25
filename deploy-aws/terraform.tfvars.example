@@ -1,5 +1,6 @@
-# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored — it
-# holds password hashes.
+# Values for a local apply. Safe to commit: there are no passwords here any
+# more. The roster lives in Secrets Manager, seeded once by Terraform and
+# rotated there — see the Viewers section below.
 
 project_name = "watcher"
 aws_region   = "us-east-1"
@@ -26,13 +27,46 @@ github_branches = ["master"]
 create_oidc_provider = true
 
 # --- Viewers -----------------------------------------------------------------
-# Generate each hash with:  node scripts/hash-password.mjs
+# With auth_provider = "roster", this is username, display name and roles only.
+# There is deliberately no password here: Terraform creates a Secrets Manager
+# secret named "<project>/users" and seeds it with a generated password per
+# user on the first apply, then never looks at the value again.
+#
+# To read the password you were given, or to change it:
+#
+#   aws secretsmanager get-secret-value --secret-id watcher/users \
+#     --profile abdul.cloud0two --query SecretString --output text
+#
+#   aws secretsmanager put-secret-value --secret-id watcher/users \
+#     --profile abdul.cloud0two --secret-string '[{"username":"Abdul",
+#     "name":"Abdul","roles":["viewer","admin"],"password":"the new one"}]'
+#
+# The console works just as well. A change takes effect within roster_ttl_seconds
+# (a minute by default) with no deploy, and the next terraform apply will not
+# revert it.
+#
+# An entry may carry "password" (plaintext, which the handler hashes on load)
+# or "passwordHash" from scripts/hash-password.mjs. Prefer the hash if you are
+# scripting; prefer the plaintext if you are typing into the console, because a
+# rotation you cannot perform is a rotation that never happens.
+#
+# With auth_provider = "cognito", add an email per user instead — Cognito
+# generates the temporary password and emails the invitation:
+#
+# users = [
+#   {
+#     username = "Abdul"
+#     name     = "Abdul"
+#     email    = "you@example.com"   # must be real; it receives the invitation
+#   },
+# ]
 users = [
   {
-    username      = "alex"
-    name          = "Alex"
-    roles         = ["viewer"]
-    password_hash = "scrypt$16384$8$1$REPLACE_ME$REPLACE_ME"
+    username = "Abdul"
+    name     = "Abdul"
+    # "admin" is what opens the dashboard. It is checked on the server, in the
+    # session, not merely hidden in the interface.
+    roles = ["viewer", "admin"]
   },
 ]
 

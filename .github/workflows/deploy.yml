@@ -64,15 +64,16 @@ jobs:
         working-directory: deploy-aws
 
       # terraform.tfvars is tracked and loads automatically, which is where the
-      # viewer roster comes from. ci.tfvars then overrides aws_profile to null,
-      # since a runner has no ~/.aws/config. TF_VAR_users is the fallback for
-      # when the roster is not in git: environment variables sit below tfvars
-      # files in precedence, so it is ignored whenever that file sets users.
+      # viewer roster comes from — usernames and roles only, no secret. ci.tfvars
+      # then overrides aws_profile to null, since a runner has no ~/.aws/config.
+      #
+      # There is no TF_VAR_users here any more. It was never reaching Terraform:
+      # environment variables rank below tfvars files, so the tracked file won
+      # every time and the repository secret was silently ignored. Passwords now
+      # live in Secrets Manager, which is not something a deploy passes in.
       - name: Apply
         run: terraform apply -auto-approve -input=false -var-file=ci.tfvars
         working-directory: deploy-aws
-        env:
-          TF_VAR_users: ${{ secrets.TF_VAR_USERS }}
 
       - name: Collect outputs
         id: output

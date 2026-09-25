@@ -23,8 +23,8 @@ terraform {
 
   # Shared state, so a laptop and GitHub Actions apply the same stack instead
   # of each building their own. The state holds the CloudFront signing private
-  # key and the session secret in plaintext, so the bucket must stay private
-  # and versioned.
+  # key, the session secret and the generated seed passwords in plaintext, so
+  # the bucket must stay private and versioned.
   #
   # use_lockfile is S3-native locking: a .tflock object beside the state, which
   # replaces the DynamoDB table this used to require.
