@@ -195,6 +195,54 @@ try {
     assert.ok(titles.includes('Market Structure and Liquidity'));
   });
 
+  await step('a course name finds the course', async () => {
+    // The defect: only video titles were searched. The library's courses are
+    // named "Gaurdeer Mentorship", "SweeGlu Elliott Wave Course" -- and its
+    // lessons are called "Class - 1", so the names worth searching for were
+    // exactly the ones that matched nothing.
+    await page.goto(`${BASE}/search?q=gaurdeer`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.result__name');
+
+    const found = await page.$$eval('.result__name', (els) => els.map((el) => el.textContent));
+    assert.deepEqual(found, ['Gaurdeer Mentorship']);
+
+    // And its lessons come with it, because a title inherits the words of
+    // every collection above it.
+    const videos = await page.$$eval('.card', (els) =>
+      els.map((el) => el.getAttribute('aria-label')?.replace('Play ', '')),
+    );
+    assert.ok(videos.includes('Market Structure and Liquidity'), `got ${JSON.stringify(videos)}`);
+  });
+
+  await step('terms match in any order, and punctuation does not count', async () => {
+    const namesFor = async (q) => {
+      await page.goto(`${BASE}/search?q=${encodeURIComponent(q)}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(200);
+      return page.$$eval('.card', (els) =>
+        els.map((el) => el.getAttribute('aria-label')?.replace('Play ', '')),
+      );
+    };
+
+    // A query is a set of words, not a substring: nobody types a title in the
+    // exact order it was filed under.
+    assert.ok((await namesFor('liquidity structure')).includes('Market Structure and Liquidity'));
+    assert.ok((await namesFor('STRUCTURE, market')).includes('Market Structure and Liquidity'));
+  });
+
+  await step('results appear while typing, without pressing Enter', async () => {
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('#site-search');
+    await page.type('#site-search', 'gaurdeer', { delay: 30 });
+
+    await page.waitForURL(/\/search\?q=gaurdeer/, { timeout: 10_000 });
+    await page.waitForSelector('.result__name');
+
+    // Clearing empties the box rather than submitting: the results are already
+    // live, so a submit button would do nothing visible.
+    await page.click('.searchbar__submit');
+    assert.equal(await page.locator('#site-search').inputValue(), '');
+  });
+
   await step('a search with no matches shows an empty state', async () => {
     await page.goto(`${BASE}/search?q=zzzznotathing`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.row__empty');

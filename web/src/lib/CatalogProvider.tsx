@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { fetchCatalog } from './api';
+import { searchCatalog, type SearchResults } from './search';
 import type { Catalog, Collection, Title } from './types';
 
 interface CatalogContextValue {
@@ -26,7 +27,8 @@ interface CatalogContextValue {
   titlesBeneath: (collectionId: string) => Title[];
   /** Root-first ancestry, for breadcrumbs. */
   pathTo: (collectionId: string) => Collection[];
-  search: (query: string) => Title[];
+  /** Collections as well as titles: a course name is what people search for. */
+  search: (query: string) => SearchResults;
   featured: Title | null;
 }
 
@@ -126,16 +128,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       titlesDirectlyIn: (collectionId) => titlesByCollection.get(collectionId) ?? [],
       titlesBeneath,
       pathTo,
-      search: (query) => {
-        const needle = query.trim().toLowerCase();
-        if (!needle) return [];
-        return titles.filter((title) =>
-          [title.title, title.description, title.instructor ?? '', ...(title.tags ?? [])]
-            .join(' ')
-            .toLowerCase()
-            .includes(needle),
-        );
-      },
+      search: (query) => searchCatalog(query, titles, collections, pathTo),
       featured: titles.find((title) => title.featured) ?? titles[0] ?? null,
     };
   }, [catalog, loading, error, reload]);

@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Link, NavLink, useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import { useCatalog } from '../lib/CatalogProvider';
-import { COLLECTION_ICONS, HomeIcon, SearchIcon, SettingsIcon, SignOutIcon, SlidersIcon } from './icons';
+import { CloseIcon, COLLECTION_ICONS, HomeIcon, SearchIcon, SettingsIcon, SignOutIcon } from './icons';
 
 /**
  * A rail rather than a bar, and a search that floats over the artwork.
@@ -15,11 +15,34 @@ export function Header() {
   const { user, logout } = useAuth();
   const { roots } = useCatalog();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [query, setQuery] = useState(searchParams.get('q') ?? '');
 
   // Keep the box in step with the URL when the viewer navigates back or forward.
   useEffect(() => setQuery(searchParams.get('q') ?? ''), [searchParams]);
+
+  /**
+   * Results as you type. The catalog is already in memory, so there is nothing
+   * to wait for and no reason to make somebody press Enter to find out whether
+   * a word matches anything.
+   *
+   * The first keystroke pushes a history entry and the rest replace it, so
+   * Back returns to wherever the search started rather than walking one
+   * character at a time.
+   */
+  const typing = useRef(false);
+  useEffect(() => {
+    if (!typing.current) return;
+    const onSearch = location.pathname === '/search';
+    const timer = window.setTimeout(() => {
+      const trimmed = query.trim();
+      navigate(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : '/search', {
+        replace: onSearch,
+      });
+    }, 180);
+    return () => window.clearTimeout(timer);
+  }, [query, navigate, location.pathname]);
 
   const railItem = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'rail__item is-active' : 'rail__item';
@@ -93,12 +116,29 @@ export function Header() {
           type="search"
           placeholder="Search for a title"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            typing.current = true;
+            setQuery(event.target.value);
+          }}
         />
-        <button className="searchbar__submit" type="submit" title="Search">
-          <SlidersIcon />
-          <span className="visually-hidden">Search</span>
-        </button>
+
+        {/* Clears, rather than submitting. The results are already live, so a
+            submit button does nothing a viewer can see -- and the one that was
+            here wore a filter icon, which promised filters that do not exist. */}
+        {query && (
+          <button
+            className="searchbar__submit"
+            type="button"
+            title="Clear search"
+            onClick={() => {
+              typing.current = true;
+              setQuery('');
+            }}
+          >
+            <CloseIcon />
+            <span className="visually-hidden">Clear search</span>
+          </button>
+        )}
       </form>
     </>
   );
