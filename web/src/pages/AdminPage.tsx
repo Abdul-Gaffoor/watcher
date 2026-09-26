@@ -6,13 +6,16 @@ import {
   type CSSProperties,
   type FormEvent,
 } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Spinner } from '../components/Spinner';
 import { useAuth } from '../auth/AuthProvider';
 import { adminApi } from '../lib/api';
+import { useCatalog } from '../lib/CatalogProvider';
 import { capturePoster } from '../lib/poster';
 import { backfillPoster, uploadPoster, uploadVideo } from '../lib/uploads';
 import { NOTE_ACCEPT, formatBytes, prepareNote, uploadNote } from '../lib/notes';
+import { isEditable } from '../lib/note-editing';
+import { slugify, uniqueId } from '../lib/slug';
 import type { Catalog, Collection, Note, Title } from '../lib/types';
 
 /**
@@ -26,15 +29,6 @@ import type { Catalog, Collection, Note, Title } from '../lib/types';
  * server unless the session carries the admin role; this only decides what is
  * worth showing to somebody who already has it.
  */
-
-function slugify(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 64);
-}
 
 /**
  * "Class - 2" must sort after "Class - 1" and before "Class - 10". A plain
@@ -91,6 +85,8 @@ function flatten(collections: Collection[], parentId: string | null = null, dept
 
 export function AdminPage() {
   const { user } = useAuth();
+  // Only to tell the rest of the app that what it is showing has changed.
+  const { reload } = useCatalog();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -214,6 +210,10 @@ export function AdminPage() {
       setCatalog(saved);
       setDirty(false);
       setNotice('Saved.');
+      // The rest of the app is reading its own copy of the catalog, fetched
+      // when it mounted. Without this, a video uploaded here is missing from
+      // browse until the page is reloaded by hand.
+      reload();
       return saved;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not save');
@@ -228,19 +228,12 @@ export function AdminPage() {
     const name = newName.trim();
     if (!name) return;
 
-    let id = slugify(name);
-    if (!id) {
+    const slug = slugify(name);
+    if (!slug) {
       setError('That name has no letters or digits to make an id from.');
       return;
     }
-    // Ids are the URL and the S3 prefix, so a clash has to be resolved rather
-    // than silently merged into the existing shelf.
-    const taken = new Set(catalog.collections.map((collection) => collection.id));
-    if (taken.has(id)) {
-      let suffix = 2;
-      while (taken.has(`${id}-${suffix}`)) suffix += 1;
-      id = `${id}-${suffix}`;
-    }
+    const id = uniqueId(slug, catalog.collections.map((collection) => collection.id));
 
     mutate({
       collections: [...catalog.collections, { id, name, parentId: newParent || null }],
@@ -414,17 +407,12 @@ export function AdminPage() {
     if (!noteFile || !noteTitle.trim() || !noteCollection) return;
 
     const name = noteTitle.trim();
-    let id = slugify(name);
-    const taken = new Set((catalog.notes ?? []).map((note) => note.id));
-    if (!id) {
+    const slug = slugify(name);
+    if (!slug) {
       setError('That name has no letters or digits to make an id from.');
       return;
     }
-    if (taken.has(id)) {
-      let suffix = 2;
-      while (taken.has(`${id}-${suffix}`)) suffix += 1;
-      id = `${id}-${suffix}`;
-    }
+    const id = uniqueId(slug, (catalog.notes ?? []).map((note) => note.id));
 
     setError(null);
     setNotice(null);
@@ -476,13 +464,7 @@ export function AdminPage() {
     if (!file || !videoTitle.trim() || !videoCollection) return;
 
     const name = videoTitle.trim();
-    let id = slugify(name);
-    const taken = new Set(catalog.titles.map((title) => title.id));
-    if (taken.has(id)) {
-      let suffix = 2;
-      while (taken.has(`${id}-${suffix}`)) suffix += 1;
-      id = `${id}-${suffix}`;
-    }
+    const id = uniqueId(slugify(name), catalog.titles.map((title) => title.id));
 
     setError(null);
     setNotice(null);
@@ -777,10 +759,17 @@ export function AdminPage() {
       </section>
 
       <section className="admin__panel">
-        <h2>Notes</h2>
+        <header className="admin__panel-head">
+          <h2>Notes</h2>
+          {/* Writing one is a different job from filing one, so it is its own
+              page rather than another field on this form. */}
+          <Link className="button button--ghost" to="/write">
+            Write a note
+          </Link>
+        </header>
         <p className="page__subtitle admin__hint">
-          Markdown, PDF or Word. A Word document is converted so it can be read in the app; the
-          original stays downloadable.
+          Write one in the app, or upload Markdown, PDF or Word. A Word document is converted so it
+          can be read in the app; the original stays downloadable.
         </p>
 
         <form className="admin__form" onSubmit={addNote}>
@@ -867,6 +856,14 @@ export function AdminPage() {
                         </option>
                       ))}
                     </select>
+
+                    {/* A PDF is a picture of a document; there is nothing to
+                        edit, so it is not offered. */}
+                    {isEditable(note) && (
+                      <Link className="admin__edit" to={`/notes/${note.id}/edit`}>
+                        Edit
+                      </Link>
+                    )}
 
                     <button className="admin__remove" type="button" onClick={() => removeNote(note.id)}>
                       Remove

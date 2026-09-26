@@ -1,8 +1,10 @@
 import {
+  ASSET_SLOT_PATTERN,
   CATALOG_VERSION,
   ID_PATTERN,
   isOwnedMediaKey,
   migrateCatalog,
+  noteAssetKeyFor,
   noteKeyFor,
   posterKeyFor,
   sourceKeyFor,
@@ -42,6 +44,15 @@ const NOTE_TYPES = new Map([
   ['html', 'text/html; charset=utf-8'],
   // The original, kept beside the conversion so it can be downloaded.
   ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+]);
+
+/** Images a note may carry. Raster only: an SVG is a script that draws. */
+const NOTE_ASSET_TYPES = new Map([
+  ['png', 'image/png'],
+  ['jpg', 'image/jpeg'],
+  ['jpeg', 'image/jpeg'],
+  ['webp', 'image/webp'],
+  ['gif', 'image/gif'],
 ]);
 
 /** The extension a note is stored under, given what was uploaded. */
@@ -262,6 +273,34 @@ export function signUpload(config, body) {
         credentials,
         expiresIn: UPLOAD_URL_TTL,
       }),
+    };
+  }
+
+  if (op === 'note-asset') {
+    const noteId = String(body.noteId ?? '');
+    if (!ID_PATTERN.test(noteId)) {
+      throw new AdminError('That note id must be lowercase letters, digits and hyphens.');
+    }
+
+    const slot = String(body.slot ?? '');
+    if (!ASSET_SLOT_PATTERN.test(slot)) {
+      throw new AdminError('That asset slot is not one this service would have issued.');
+    }
+
+    const extension = String(body.extension ?? '').toLowerCase();
+    const contentType = NOTE_ASSET_TYPES.get(extension);
+    if (!contentType) {
+      throw new AdminError(
+        `Images in a note must be one of: ${[...NOTE_ASSET_TYPES.keys()].join(', ')}.`,
+      );
+    }
+
+    const key = noteAssetKeyFor(noteId, slot, extension);
+    return {
+      key,
+      contentType,
+      mediaPath: `/${key}`,
+      url: presignS3({ method: 'PUT', bucket, key, region, credentials, expiresIn: UPLOAD_URL_TTL }),
     };
   }
 

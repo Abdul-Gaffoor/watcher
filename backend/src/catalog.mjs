@@ -219,6 +219,18 @@ export function noteKeyFor(noteId, extension) {
   return `media/notes/${noteId}/source.${extension}`;
 }
 
+/**
+ * An image pasted or inserted into a note. It sits in the note's own folder so
+ * it is deleted with it, and the slot is a client-supplied token rather than a
+ * filename: a filename is attacker-controlled and would have to be sanitised,
+ * whereas a token can simply be required to be a token.
+ */
+export function noteAssetKeyFor(noteId, slot, extension) {
+  return `media/notes/${noteId}/asset-${slot}.${extension}`;
+}
+
+export const ASSET_SLOT_PATTERN = /^[a-z0-9]{6,32}$/;
+
 /** Guards a key handed back by a client mid-upload. */
 export function isOwnedMediaKey(key) {
   const match = /^media\/(titles|notes)\/([a-z0-9-]+)\/[a-z0-9._-]+$/.exec(String(key ?? ''));

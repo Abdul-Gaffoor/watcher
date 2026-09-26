@@ -12,7 +12,7 @@
 import { createServer } from 'node:http';
 import { generateKeyPairSync } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { hashPassword } from '../backend/src/crypto-utils.mjs';
@@ -51,8 +51,16 @@ process.env.CLOUDFRONT_KEY_PAIR_ID = 'LOCALDEVKEYPAIR';
 process.env.CLOUDFRONT_PRIVATE_KEY = privateKey;
 process.env.MEDIA_RESOURCE = `http://localhost:${port}/media/*`;
 // Stands in for the media bucket so the dashboard's structure editing works
-// against a real file. Uploading still needs object storage.
+// against a real file.
 process.env.LOCAL_CATALOG_PATH = catalogPath;
+
+// Enough for the real handler to derive keys and sign. The signature it
+// produces is then thrown away and the upload is pointed back here -- see
+// LOCAL_PUT_OPS below -- so no real bucket or credential is involved.
+process.env.MEDIA_BUCKET ??= 'watcher-local-dev';
+process.env.MEDIA_REGION ??= 'eu-west-1';
+process.env.AWS_ACCESS_KEY_ID ??= 'AKIALOCALDEVELOPMENT';
+process.env.AWS_SECRET_ACCESS_KEY ??= 'local-development-secret-not-for-production';
 
 const { handler } = await import('../backend/src/index.mjs');
 
@@ -77,6 +85,61 @@ const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
+
+/**
+ * The upload operations this stand-in can serve: the ones that are a single
+ * PUT of a small file. A video upload is a multipart exchange with S3 itself
+ * and there is nothing here for it to talk to, so it keeps saying so.
+ */
+const LOCAL_PUT_OPS = new Set(['poster', 'note', 'note-asset']);
+
+/**
+ * Turns the handler's presigned S3 URL into one pointing back at this server.
+ *
+ * The real handler still does the work that matters -- refusing a session
+ * without the admin role, validating the id, the slot and the extension, and
+ * deciding the key -- and only the destination is swapped, so what is exercised
+ * locally is the same code that runs deployed.
+ */
+function localiseUpload(op, payload) {
+  if (!LOCAL_PUT_OPS.has(op)) {
+    return {
+      statusCode: 501,
+      body: JSON.stringify({
+        error:
+          'Uploading a video needs object storage, which local development has not got. Notes, posters and structure editing all work.',
+      }),
+    };
+  }
+  // Same-origin and relative, so it goes back through whatever proxied the
+  // API call -- the Vite dev server in practice.
+  return { url: `/dev-upload/${payload.key}` };
+}
+
+/**
+ * Writes an upload into `content/`, where the media route will serve it from.
+ *
+ * Unauthenticated, like the presigned URL it stands in for -- except that this
+ * one is guessable, where a signature is not. That is fine for a server bound
+ * to localhost with a hardcoded password and a throwaway key, and it is the
+ * reason this file is not a deployment artefact.
+ */
+async function receiveUpload(pathname, request, response) {
+  const key = decodeURIComponent(pathname.slice('/dev-upload/'.length));
+  const filePath = normalize(resolve(contentDir, key));
+  if (!filePath.startsWith(contentDir) || !key.startsWith('media/')) {
+    response.writeHead(403, { 'content-type': 'text/plain' }).end('Forbidden');
+    return;
+  }
+
+  const chunks = [];
+  for await (const chunk of request) chunks.push(chunk);
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, Buffer.concat(chunks));
+
+  // S3 answers a PUT with an empty 200 and an ETag; only the status is read.
+  response.writeHead(200, { etag: '"local-development"' }).end();
+}
 
 async function readRequestBody(request) {
   const chunks = [];
@@ -153,21 +216,43 @@ createServer(async (request, response) => {
     return;
   }
 
+  if (url.pathname.startsWith('/dev-upload/')) {
+    if (request.method !== 'PUT') {
+      response.writeHead(405, { 'content-type': 'text/plain' }).end('Method not allowed');
+      return;
+    }
+    await receiveUpload(url.pathname, request, response);
+    return;
+  }
+
   if (!url.pathname.startsWith('/api/')) {
     response.writeHead(404, { 'content-type': 'text/plain' }).end('Not found');
     return;
   }
 
   // Shape the request the way a Lambda Function URL (payload v2) would.
-  const result = await handler({
+  const body = await readRequestBody(request);
+
+  let result = await handler({
     rawPath: url.pathname,
     rawQueryString: url.search.slice(1),
     headers: request.headers,
     cookies: (request.headers.cookie ?? '').split(';').map((part) => part.trim()).filter(Boolean),
-    body: await readRequestBody(request),
+    body,
     isBase64Encoded: false,
     requestContext: { http: { method: request.method ?? 'GET', sourceIp: '127.0.0.1' } },
   });
+
+  // Only once the handler has allowed it: a rewritten URL on a refused request
+  // would be an upload endpoint that skipped the authorisation.
+  if (url.pathname === '/api/admin/uploads' && result.statusCode === 200) {
+    const payload = JSON.parse(result.body);
+    const patch = localiseUpload(JSON.parse(body ?? '{}').op, payload);
+    result =
+      patch.statusCode
+        ? { ...result, statusCode: patch.statusCode, body: patch.body }
+        : { ...result, body: JSON.stringify({ ...payload, ...patch }) };
+  }
 
   const headers = { ...result.headers };
   // `Secure` cookies are dropped by browsers over plain http://localhost.

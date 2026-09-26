@@ -73,6 +73,12 @@ auth, JWT handling and cookie behaviour are the same code paths as production.
 Signature verification is the one thing it does not do — that is CloudFront's
 job.
 
+Uploads that are a single PUT — a note, a note's images, a poster — work
+locally: the handler still decides the key and refuses anything it would refuse
+deployed, and only the destination is swapped for `content/media/`, where the
+dev server serves it from. A video upload is a multipart exchange with S3
+itself, so it says so instead.
+
 ### Adding a video locally
 
 ```bash
@@ -86,8 +92,9 @@ Then add or update the matching entry in `content/catalog.json`.
 ## Tests
 
 ```bash
-npm test                   # 31 backend unit tests (auth, JWT, cookie signing)
-npm run e2e                # 18 browser tests: sign-in, browse, search, playback
+npm test                   # 153 backend unit tests (auth, JWT, cookie signing)
+npm run e2e                # 49 browser tests: sign-in, browse, search, playback,
+                           # notes, writing, the dashboard, device pairing
 npm run typecheck          # strict TypeScript
 ```
 
@@ -239,6 +246,37 @@ Notes are searchable by their own name and by the course they belong to, the
 same two things a video is findable by. The text *inside* a note is not
 indexed: that would mean fetching every note on every keystroke, and wants a
 real index rather than a loop.
+
+### Writing a note in the app
+
+Not everything worth keeping arrives as a file. **Write a note** in the Notes
+panel opens an editor at `/write`; **Edit** on any note you are reading, or in
+the Notes panel, reopens it at `/notes/<id>/edit`.
+
+The editor is rich rather than a Markdown box, because knowing the syntax
+should not be the price of writing something down. It has headings, bold,
+italic, strikethrough, inline code, links, bulleted and numbered lists,
+checklists, quotes, code blocks, dividers, tables and images — pasted
+screenshots included, which is the common case for a chart. What it stores is
+still **Markdown**: portable, diffable, readable without this app, and every
+one of those features has a GitHub-flavoured spelling. Storing the editor's own
+HTML would tie every note written here to whichever editor was installed the
+day it was written.
+
+The one exception is a note that is already HTML, meaning one converted from a
+`.docx`. Editing it keeps it as HTML rather than quietly rewriting somebody's
+imported document into a different format behind their back. A PDF has nothing
+to edit, so it is not offered an editor at all — upload a new file instead.
+
+**Goes in** files the note, and its last option is **New collection…**, which
+makes the shelf as part of saving rather than sending you to another page to
+make it first. The new collection is written in the same save as the note, so a
+failed save leaves neither.
+
+A note's id comes from its title the first time it is saved and never changes
+after: the id is the URL and the storage prefix, so renaming a note later
+leaves its stored file exactly where it is. Editing keeps the id, the filing
+and the format.
 
 **Lesson order** is the order the videos sit in, since a course is read top to
 bottom and nothing else in the catalog expresses sequence. The dashboard groups

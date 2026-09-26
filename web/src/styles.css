@@ -2742,7 +2742,9 @@ img {
   font-size: 14px;
 }
 
-.note__download {
+/* The links in a note's byline: download it, edit it. */
+.note__download,
+.note__action {
   color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -2921,4 +2923,278 @@ img {
 .admin__hint {
   margin: -6px 0 18px;
   font-size: 14px;
+}
+
+/* ---------- Dashboard: note actions ---------- */
+
+.admin__edit {
+  color: var(--text-muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.admin__edit:hover {
+  color: var(--accent);
+}
+
+/* ---------- Writing a note ---------- */
+
+/* The page is the document. No panel, no card, no border around the writing
+   area: chrome around a page of prose makes it feel like a form field, and what
+   is being written is not a form. */
+.note-edit {
+  max-width: 52rem;
+}
+
+.note-edit__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding-bottom: 18px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.note-edit__where {
+  display: grid;
+  gap: 12px;
+  /* Without this a long collection name in the select pushes the actions off
+     the row: a grid item's default min-width is its content. */
+  min-width: 0;
+  flex: 1 1 320px;
+}
+
+/* The title is typed where it will be read -- same face, same size as the
+   heading on the note's own page, rather than in a labelled box above it. */
+.note-edit__title {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-family: var(--display);
+  font-size: clamp(30px, 4.4vw, 46px);
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+}
+
+.note-edit__title::placeholder {
+  color: var(--text-faint);
+}
+
+.note-edit__title:focus {
+  outline: none;
+}
+
+.note-edit__title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+.note-edit__filing {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.note-edit__filing .field {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+
+.note-edit__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.note-edit__error {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: rgba(224, 138, 122, 0.14);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ---------- The editor ---------- */
+
+.editor {
+  margin-top: 8px;
+}
+
+/* Sticky, because the toolbar is useless at the top of a page you have
+   scrolled two screens down. Offset by the header it sits under. */
+.tb {
+  position: sticky;
+  top: 64px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  margin-bottom: 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.tb__rule {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--border);
+}
+
+.tb__select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.tb__button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tb__button:hover:not(:disabled) {
+  background: var(--bg-input);
+  color: var(--text);
+}
+
+/* The accent marks state rather than decorating: what is on right now. */
+.tb__button.is-on {
+  background: rgba(216, 165, 102, 0.16);
+  color: var(--accent);
+}
+
+.tb__button:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+
+/* The surface carries .prose as well, deliberately: what you type looks like
+   what a reader will see. Only the things a reader never needs are added here. */
+.editor__surface {
+  min-height: 60vh;
+  padding-bottom: 30vh;
+}
+
+.editor__surface:focus {
+  outline: none;
+}
+
+/* ProseMirror's placeholder for an empty document. The text comes from the
+   extension's config, not from here. */
+.editor__surface p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* A table in the reader has no borders between columns; in the editor it needs
+   them, because you are aiming a cursor at a cell. */
+.editor__surface table {
+  table-layout: fixed;
+}
+
+.editor__surface th,
+.editor__surface td {
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.editor__surface .selectedCell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(216, 165, 102, 0.12);
+  pointer-events: none;
+}
+
+.editor__surface .column-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -2px;
+  width: 4px;
+  background: var(--accent);
+}
+
+.editor__surface .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+}
+
+/* Checklists, in the editor and on the page: a list of boxes, with the marker
+   the box itself rather than a bullet beside it. */
+.prose ul[data-type='taskList'] {
+  padding-left: 0;
+  list-style: none;
+}
+
+.prose ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.prose ul[data-type='taskList'] li > label {
+  flex: 0 0 auto;
+  margin-top: 0.25em;
+  user-select: none;
+}
+
+.prose ul[data-type='taskList'] li > div {
+  min-width: 0;
+}
+
+.prose ul[data-type='taskList'] input[type='checkbox'] {
+  accent-color: var(--accent);
+  /* Disabled in the reading view, where a box is a fact about the note rather
+     than something to click. It still has to be legible. */
+  opacity: 1;
+}
+
+.prose ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+@media (max-width: 860px) {
+  /* Under the mobile header, which is shorter. */
+  .tb {
+    top: 56px;
+  }
+
+  /* On a phone the actions belong under the filing fields rather than beside
+     them, where they get one word of width each. */
+  .note-edit__actions {
+    width: 100%;
+  }
+
+  .note-edit__actions .button {
+    flex: 1 1 0;
+    justify-content: center;
+  }
 }

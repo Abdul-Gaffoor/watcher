@@ -60,6 +60,12 @@ async function cleanup() {
   for (const child of children) child.kill('SIGTERM');
   await rm(scratchDir, { recursive: true, force: true });
   await rm(resolve(repoRoot, 'content/media/_e2e'), { recursive: true, force: true });
+  // Written by the editor steps, into the same place a deployment's bucket
+  // would hold it.
+  await rm(resolve(repoRoot, 'content/media/notes/fibonacci-retracements'), {
+    recursive: true,
+    force: true,
+  });
 }
 
 const results = [];
@@ -414,11 +420,15 @@ try {
       ['admin', '/admin'],
       ['watch', `/watch/${FIXTURE_TITLE_ID}`],
       ['pairing', '/pair'],
+      // The editor arrives as its own chunk, so there is something to wait for
+      // beyond the network going quiet -- otherwise this measures a spinner.
+      ['write', '/write', '.editor__surface'],
     ];
 
     const broken = [];
-    for (const [name, path] of routes) {
+    for (const [name, path, waitFor] of routes) {
       await page.goto(`${BASE}${path}`, { waitUntil: 'networkidle' });
+      if (waitFor) await page.waitForSelector(waitFor, { timeout: 20_000 });
       await page.waitForTimeout(350);
 
       const result = await page.evaluate(() => {
@@ -600,6 +610,198 @@ try {
         `a note should be findable by ${why}; got ${JSON.stringify(names)}`,
       );
     }
+  });
+
+  // ---------------------------------------------------- writing a note --
+
+  await step('a note can be written in the app, into a collection made as you go', async () => {
+    await page.goto(`${BASE}/write`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+
+    await page.fill('.note-edit__title', 'Fibonacci retracements');
+
+    // The collection does not exist yet. Making it should be part of writing
+    // the note, not an errand on another page first.
+    await page.selectOption('.note-edit__filing select', '__new__');
+    await page.fill('.note-edit__filing input[type="text"]', 'Scratch Notes');
+
+    const surface = page.locator('.editor__surface');
+    await surface.click();
+
+    await page.selectOption('.tb__select', 'h2');
+    await page.keyboard.type('The levels that matter');
+    await page.keyboard.press('Enter');
+
+    await page.selectOption('.tb__select', 'p');
+    await page.keyboard.type('The ');
+    await page.click('.tb__button[aria-label="Bold"]');
+    await page.keyboard.type('61.8%');
+    await page.click('.tb__button[aria-label="Bold"]');
+    await page.keyboard.type(' level is the one to watch.');
+    await page.keyboard.press('Enter');
+
+    // A checklist and a table: the two things a Markdown textarea makes people
+    // look up the syntax for, and the reason the editor is rich at all.
+    await page.click('.tb__button[aria-label="Checklist"]');
+    await page.keyboard.type('Mark the swing high');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Wait for the retest');
+
+    assert.equal(
+      await page.locator('.editor__surface ul[data-type="taskList"] li').count(),
+      2,
+      'the checklist should have both items',
+    );
+  });
+
+  await step('what it saves is Markdown, and it reads back as a note', async () => {
+    await page.click('button:has-text("Create note")');
+    await page.waitForURL(/\/notes\/fibonacci-retracements$/, { timeout: 20_000 });
+    await page.waitForSelector('.prose', { timeout: 15_000 });
+
+    // Rendered, not printed -- the same bar the uploaded notes are held to.
+    const shape = await page.evaluate(() => ({
+      heading: document.querySelector('.prose h2')?.textContent,
+      bold: document.querySelector('.prose strong')?.textContent,
+      boxes: document.querySelectorAll('.prose input[type="checkbox"]').length,
+      raw: document.querySelector('.prose').textContent.includes('## '),
+    }));
+    assert.equal(shape.heading, 'The levels that matter');
+    assert.equal(shape.bold, '61.8%');
+    assert.equal(shape.boxes, 2, 'the checklist should render as checkboxes');
+    assert.equal(shape.raw, false, 'markdown syntax should not be visible');
+
+    // And what was stored is Markdown, not the editor's HTML. This is the
+    // whole reason for the turndown pass: a note written here stays readable
+    // without this app, and diffs like text.
+    const stored = await page.evaluate(async () => {
+      const response = await fetch('/media/notes/fibonacci-retracements/source.md');
+      return { status: response.status, body: await response.text() };
+    });
+    assert.equal(stored.status, 200);
+    assert.match(stored.body, /^## The levels that matter$/m);
+    assert.match(stored.body, /\*\*61\.8%\*\*/);
+    assert.match(stored.body, /^- \[ \] Mark the swing high$/m);
+    assert.ok(!stored.body.includes('<p>'), `stored as HTML, not Markdown:\n${stored.body}`);
+
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/09-written-note.png`, fullPage: true });
+  });
+
+  await step('the collection it made is in the tree, with the note in it', async () => {
+    await page.goto(`${BASE}/c/scratch-notes`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.note-row', { timeout: 15_000 });
+    assert.match(await page.textContent('.note-row__name'), /Fibonacci retracements/);
+  });
+
+  await step('editing a note keeps its id, its filing and its format', async () => {
+    await page.goto(`${BASE}/notes/fibonacci-retracements/edit`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+
+    // What was written comes back as formatting, not as syntax: the round trip
+    // has to survive being stored as Markdown and parsed again.
+    const reopened = await page.evaluate(() => ({
+      heading: document.querySelector('.editor__surface h2')?.textContent,
+      bold: document.querySelector('.editor__surface strong')?.textContent,
+      boxes: document.querySelectorAll('.editor__surface input[type="checkbox"]').length,
+      title: document.querySelector('.note-edit__title').value,
+      filedUnder: document.querySelector('.note-edit__filing select').value,
+    }));
+    assert.equal(reopened.heading, 'The levels that matter');
+    assert.equal(reopened.bold, '61.8%');
+    assert.equal(reopened.boxes, 2);
+    assert.equal(reopened.title, 'Fibonacci retracements');
+    assert.equal(reopened.filedUnder, 'scratch-notes');
+
+    // The end of the document is the empty paragraph the editor keeps below the
+    // last block, so a plain paragraph is what this types into.
+    await page.locator('.editor__surface').click();
+    await page.keyboard.press('Control+End');
+    await page.keyboard.type('Added on a second pass.');
+    await page.click('button:has-text("Save")');
+
+    // Same URL, so the same id: editing must not mint a second note.
+    await page.waitForURL(/\/notes\/fibonacci-retracements$/, { timeout: 20_000 });
+    await page.waitForSelector('.prose', { timeout: 15_000 });
+    assert.match(await page.textContent('.prose'), /Added on a second pass\./);
+    assert.match(await page.textContent('.prose'), /The levels that matter/);
+    // The rest of the note came through the round trip unharmed.
+    assert.equal(await page.locator('.prose input[type="checkbox"]').count(), 2);
+    assert.equal(await page.locator('.prose strong').count(), 1);
+
+    // Re-serialised as Markdown, and the addition is a paragraph rather than
+    // being swept into the checklist above it.
+    const stored = await page.evaluate(async () => {
+      const response = await fetch('/media/notes/fibonacci-retracements/source.md', { cache: 'no-store' });
+      return response.text();
+    });
+    assert.match(stored, /^Added on a second pass\.$/m);
+    assert.match(stored, /^- \[ \] Wait for the retest$/m);
+
+    const notes = await page.evaluate(async () => {
+      const response = await fetch('/api/admin/catalog');
+      const { catalog } = await response.json();
+      return catalog.notes.filter((note) => note.id === 'fibonacci-retracements');
+    });
+    assert.equal(notes.length, 1, 'editing should not have added a second note');
+    assert.equal(notes[0].format, 'md');
+    assert.equal(notes[0].collectionId, 'scratch-notes');
+  });
+
+  await step('an image put in a note is stored under that note', async () => {
+    await page.goto(`${BASE}/notes/fibonacci-retracements/edit`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+    await page.locator('.editor__surface').click();
+    await page.keyboard.press('Control+End');
+
+    // A 1x1 PNG is enough: what is being tested is where the bytes go and what
+    // the note ends up pointing at, not the picture.
+    const chooser = page.waitForEvent('filechooser');
+    await page.click('.tb__button[aria-label="Image"]');
+    (await chooser).setFiles({
+      name: 'chart.png',
+      mimeType: 'image/png',
+      buffer: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==',
+        'base64',
+      ),
+    });
+
+    const src = await page.locator('.editor__surface img').first().getAttribute('src', { timeout: 20_000 });
+    // The slot is a token the client made and the server checked; the note id
+    // is the server's, so the image lives with the note and is deleted with it.
+    assert.match(src, /^\/media\/notes\/fibonacci-retracements\/asset-[a-z0-9]{6,32}\.png$/);
+
+    const stored = await page.evaluate(async (path) => (await fetch(path)).status, src);
+    assert.equal(stored, 200, 'the image itself should be in storage');
+
+    await page.click('button:has-text("Save")');
+    await page.waitForURL(/\/notes\/fibonacci-retracements$/, { timeout: 20_000 });
+    await page.waitForSelector('.prose img', { timeout: 15_000 });
+    assert.equal(await page.locator('.prose img').first().getAttribute('src'), src);
+
+    const markdown = await page.evaluate(async () => {
+      const response = await fetch('/media/notes/fibonacci-retracements/source.md', { cache: 'no-store' });
+      return response.text();
+    });
+    assert.match(markdown, /!\[[^\]]*\]\(\/media\/notes\/fibonacci-retracements\/asset-[a-z0-9]+\.png\)/);
+  });
+
+  await step('reading a note offers the way to change it, and admin only', async () => {
+    await page.goto(`${BASE}/notes/fibonacci-retracements`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.note__title', { timeout: 15_000 });
+    // Noticing that a note is wrong happens while reading it, so that is where
+    // the way to fix it belongs.
+    assert.equal(
+      await page.locator('.note__action').count(),
+      1,
+      'an admin reading a note should be offered the editor',
+    );
+  });
+
+  await step('a note that does not exist says so rather than opening blank', async () => {
+    await page.goto(`${BASE}/notes/no-such-note/edit`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.note-edit__error', { timeout: 20_000 });
+    assert.match(await page.textContent('.note-edit__error'), /not in the library/);
   });
 
   // ------------------------------------------------- course and theatre --

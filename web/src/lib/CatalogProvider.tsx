@@ -47,7 +47,9 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetchCatalog()
+    // Anything past the first load is an explicit reload, and an explicit
+    // reload is always asking for what is there now.
+    fetchCatalog({ fresh: nonce > 0 })
       .then((next) => {
         if (!cancelled) setCatalog(next);
       })

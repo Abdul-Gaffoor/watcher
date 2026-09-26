@@ -112,10 +112,20 @@ export const deviceApi = {
  * The catalog lives in the media bucket, so it is gated by the same signed
  * cookies as the video segments. A 403 means the cookies aged out mid-session:
  * refresh them once and retry before bouncing the user to the login screen.
+ *
+ * `fresh` skips the browser's copy, which is what a reload after a save needs:
+ * the dashboard has just changed the thing being fetched, and reading a stale
+ * copy back would show the admin their own edit missing. It reaches only as far
+ * as this browser -- behind CloudFront the object's own `max-age=60` still
+ * applies at the edge, so a save can take up to a minute to be visible to
+ * everybody else.
  */
-export async function fetchCatalog(): Promise<Catalog> {
+export async function fetchCatalog({ fresh = false } = {}): Promise<Catalog> {
   const load = async () => {
-    const response = await fetch(CATALOG_URL, { credentials: 'same-origin' });
+    const response = await fetch(CATALOG_URL, {
+      credentials: 'same-origin',
+      ...(fresh ? { cache: 'no-store' as RequestCache } : {}),
+    });
     if (!response.ok) throw new ApiError('Could not load the catalog', response.status);
     return (await response.json()) as Catalog;
   };

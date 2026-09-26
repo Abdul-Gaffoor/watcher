@@ -242,6 +242,49 @@ test('what a note is stored as depends on what was uploaded', () => {
   assert.equal(storedNoteFormat('exe'), null);
 });
 
+test("an image inside a note is signed into that note's own folder", () => {
+  const signed = signUpload(config, {
+    op: 'note-asset',
+    noteId: 'wave-theory',
+    slot: 'a1b2c3d4',
+    extension: 'png',
+  });
+
+  assert.equal(signed.key, 'media/notes/wave-theory/asset-a1b2c3d4.png');
+  assert.equal(signed.contentType, 'image/png');
+  assert.equal(isOwnedMediaKey(signed.key), true);
+});
+
+test('a note image has to be a raster image, and never an SVG', () => {
+  // An SVG is a script that draws, served from the same origin as the app.
+  for (const extension of ['svg', 'html', 'pdf', 'exe']) {
+    assert.throws(
+      () => signUpload(config, { op: 'note-asset', noteId: 'n', slot: 'a1b2c3d4', extension }),
+      /Images in a note must be one of/,
+      `expected .${extension} to be refused`,
+    );
+  }
+});
+
+test('an asset slot must be a token, not a filename', () => {
+  // A filename is attacker-controlled and would have to be sanitised; a token
+  // can simply be required to be a token.
+  for (const slot of ['../../etc', 'my photo.png', 'AB', '', 'a'.repeat(40)]) {
+    assert.throws(
+      () => signUpload(config, { op: 'note-asset', noteId: 'n', slot, extension: 'png' }),
+      /not one this service would have issued/,
+      `expected ${JSON.stringify(slot)} to be refused`,
+    );
+  }
+});
+
+test('an SVG is refused as a note image, because it is a script that draws', () => {
+  assert.throws(
+    () => signUpload(config, { op: 'note-asset', noteId: 'n', slot: 'abcdef', extension: 'svg' }),
+    /must be one of/,
+  );
+});
+
 // ------------------------------------------------------------- uploading --
 
 test('begin derives the key rather than trusting the client', () => {

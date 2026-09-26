@@ -87,6 +87,41 @@ Content type matters more here than for video: a PDF served as
 as `text/html` would execute. It is set on the presigned PUT, so S3 serves
 each note with the type it was stored under.
 
+### Writing one: a rich editor over a plain format
+
+The in-app editor is TipTap (ProseMirror), which works in HTML. What it saves
+is Markdown, converted on the way out with turndown. The asymmetry is
+deliberate:
+
+- Markdown is what survives. It is readable without this app, it diffs like
+  text, and every feature the toolbar offers has a GitHub-flavoured spelling.
+  The editor's own HTML would tie each note to whichever editor was installed
+  the day it was written.
+- Turndown covers most of it, and three things it does not: strikethrough,
+  checklists (`- [x]`), and tables, which it flattens into a paragraph. A table
+  is one of the reasons to have a rich editor at all, so it is written out by
+  hand in `note-editing.ts`.
+- A note already stored as HTML — anything converted from a `.docx` — stays
+  HTML when edited. Rewriting somebody's imported document into another format
+  behind their back is not an upgrade.
+- A PDF is a picture of a document. `isEditable` refuses it, and the entry
+  points are not shown for one.
+
+Images pasted or chosen in the editor go to `media/notes/<id>/asset-<slot>.<ext>`
+through the same presigned single PUT as a poster. The slot is a token the
+client generates and the server checks against a pattern; it is never a
+filename, because a filename in a key is somebody else's path traversal. SVG is
+refused — an SVG is a script that draws.
+
+A note being written needs an id before it is saved, because an image dropped
+into it is stored under that id. The page settles one on mount and keeps it, so
+a draft's images and the saved note agree. The id itself comes from the title
+when it is first saved, and never changes after: it is the URL and the storage
+prefix, so a rename moves no bytes.
+
+The editor is ~145 kB gzipped and loads as its own chunk, behind `/write` and
+`/notes/<id>/edit`. Nobody reading a note pays for it.
+
 ## Pairing a device
 
 RFC 8628 (the OAuth device grant) in miniature, for screens where typing a
@@ -184,6 +219,11 @@ last segment has no dot to `/index.html`. It runs only on the app behaviour, so
 pinned to its own chunk and loaded with a dynamic `import()` inside the player,
 so it is fetched only when a viewer opens a title, and never on the browse page.
 Safari and iOS play HLS natively and skip the download entirely.
+
+The same rule applies to everything else that is only wanted occasionally: the
+note editor (~145 kB), the `.docx` converter (~126 kB), the Markdown parser and
+the sanitiser are all dynamic imports. The entry chunk is ~83 kB gzipped, and
+the browse page loads that and nothing else.
 
 ## Catalog as a static file
 

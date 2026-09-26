@@ -15,6 +15,11 @@ export default defineConfig({
     proxy: {
       '/api': { target: apiTarget, changeOrigin: true },
       '/media': { target: apiTarget, changeOrigin: true },
+      // Where the dev API accepts the uploads that a deployment presigns
+      // straight to S3. Proxied rather than called on its own port, because
+      // then it is same-origin: a cross-origin PUT needs the CORS headers the
+      // real bucket is configured with, and nothing here is.
+      '/dev-upload': { target: apiTarget, changeOrigin: true },
     },
   },
   build: {

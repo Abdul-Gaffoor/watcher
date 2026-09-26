@@ -1,17 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Spinner } from '../components/Spinner';
+import { useAuth } from '../auth/AuthProvider';
 import { useCatalog } from '../lib/CatalogProvider';
+import { renderMarkdown, sanitiseHtml } from '../lib/markdown';
+import { isEditable } from '../lib/note-editing';
 import { formatBytes } from '../lib/notes';
 
 /**
  * Reading a note.
  *
- * Markdown is parsed and sanitised here rather than at upload, so the stored
- * file stays the thing that was written -- editable, downloadable, and not a
- * rendering decision baked in months ago. HTML converted from a .docx was
- * already sanitised when it was stored; it is sanitised again on the way in,
- * because the store is not a trust boundary.
+ * Markdown is parsed and sanitised on the way to the screen rather than at
+ * upload, so the stored file stays the thing that was written -- editable,
+ * downloadable, and not a rendering decision baked in months ago. Both of those
+ * happen in lib/markdown.ts, which the editor shares, so a note looks the same
+ * whichever of the two opened it.
  *
  * A PDF is handed to the browser's own viewer. Nothing worth building beats
  * it, and every attempt costs a megabyte.
@@ -41,6 +44,7 @@ type State =
 export function NotePage() {
   const { noteId = '' } = useParams();
   const { loading, noteById, collectionById, pathTo } = useCatalog();
+  const { user } = useAuth();
   const note = noteById(noteId);
 
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -54,14 +58,8 @@ export function NotePage() {
       if (!response.ok) throw new Error(`This note could not be loaded (${response.status}).`);
       const text = await response.text();
 
-      const { default: DOMPurify } = await import('dompurify');
-
-      const raw =
-        note.format === 'html'
-          ? text
-          : await (await import('marked')).marked.parse(text, { gfm: true, breaks: false });
-
-      setState({ kind: 'ready', html: withoutLeadingTitle(DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } })) });
+      const html = note.format === 'html' ? await sanitiseHtml(text) : await renderMarkdown(text);
+      setState({ kind: 'ready', html: withoutLeadingTitle(html) });
     } catch (cause) {
       setState({ kind: 'error', message: cause instanceof Error ? cause.message : 'Could not load' });
     }
@@ -120,6 +118,14 @@ export function NotePage() {
           <a className="note__download" href={note.original ?? note.source} download>
             Download {note.originalName ? 'original' : 'file'}
           </a>
+
+          {/* Straight from what you are reading into changing it, which is where
+              you notice it needs changing. */}
+          {user?.roles.includes('admin') && isEditable(note) && (
+            <Link className="note__action" to={`/notes/${note.id}/edit`}>
+              Edit
+            </Link>
+          )}
         </p>
       </header>
 
@@ -147,7 +153,7 @@ export function NotePage() {
           </button>
         </div>
       ) : (
-        /* Sanitised above, twice for anything converted. */
+        /* Sanitised in lib/markdown.ts, on the way in. */
         <article className="prose" dangerouslySetInnerHTML={{ __html: state.html }} />
       )}
 
