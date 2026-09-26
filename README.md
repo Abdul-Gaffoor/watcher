@@ -93,7 +93,7 @@ Then add or update the matching entry in `content/catalog.json`.
 
 ```bash
 npm test                   # 153 backend unit tests (auth, JWT, cookie signing)
-npm run e2e                # 52 browser tests: sign-in, browse, search, playback,
+npm run e2e                # 53 browser tests: sign-in, browse, search, playback,
                            # notes, writing, the dashboard, device pairing
 npm run typecheck          # strict TypeScript
 ```
@@ -250,8 +250,9 @@ real index rather than a loop.
 ### Writing a note in the app
 
 Not everything worth keeping arrives as a file. **Write a note** in the Notes
-panel opens an editor at `/write`; **Edit** on any note you are reading, or in
-the Notes panel, reopens it at `/notes/<id>/edit`.
+panel opens an editor at `/notes/new`; **Edit** on any note you are reading, or
+in the Notes panel, reopens it at `/notes/<id>/edit`. A note can never be given
+the id `new` or `edit`, so there is no note whose own URL is one of those.
 
 The editor is rich rather than a Markdown box, because knowing the syntax
 should not be the price of writing something down. It has headings, bold,

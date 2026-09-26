@@ -13,7 +13,7 @@ import { adminApi } from '../lib/api';
 import { useCatalog } from '../lib/CatalogProvider';
 import { capturePoster } from '../lib/poster';
 import { backfillPoster, uploadPoster, uploadVideo } from '../lib/uploads';
-import { NOTE_ACCEPT, formatBytes, prepareNote, uploadNote } from '../lib/notes';
+import { NOTE_ACCEPT, RESERVED_NOTE_IDS, formatBytes, prepareNote, uploadNote } from '../lib/notes';
 import { isEditable } from '../lib/note-editing';
 import { slugify, uniqueId } from '../lib/slug';
 import type { Catalog, Collection, Note, Title } from '../lib/types';
@@ -412,7 +412,10 @@ export function AdminPage() {
       setError('That name has no letters or digits to make an id from.');
       return;
     }
-    const id = uniqueId(slug, (catalog.notes ?? []).map((note) => note.id));
+    const id = uniqueId(slug, [
+      ...(catalog.notes ?? []).map((note) => note.id),
+      ...RESERVED_NOTE_IDS,
+    ]);
 
     setError(null);
     setNotice(null);
@@ -763,7 +766,7 @@ export function AdminPage() {
           <h2>Notes</h2>
           {/* Writing one is a different job from filing one, so it is its own
               page rather than another field on this form. */}
-          <Link className="button button--ghost" to="/write">
+          <Link className="button button--ghost" to="/notes/new">
             Write a note
           </Link>
         </header>

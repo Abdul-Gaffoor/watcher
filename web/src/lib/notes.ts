@@ -12,6 +12,16 @@ import type { Note } from './types';
  * shipping a two-megabyte converter to every reader forever.
  */
 
+/**
+ * Ids a note may not have, because the note routes use them.
+ *
+ * `/notes/new` writes one and `/notes/<id>/edit` changes one, so a note whose
+ * id was `new` or `edit` would be a note at a URL that means something else.
+ * Refusing the id is cheaper than special-casing the router, and it is one
+ * line at the only place ids are made.
+ */
+export const RESERVED_NOTE_IDS = ['new', 'edit'];
+
 /** What the file picker should accept, and what the server will sign. */
 export const NOTE_ACCEPT = '.md,.markdown,.txt,.pdf,.docx,text/markdown,application/pdf';
 

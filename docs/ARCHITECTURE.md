@@ -142,8 +142,17 @@ for the same reason the checklist reconciliation is there: deciding where an
 implicit wrapper belongs is the DOM parser's least reliable job, and doing it
 once by hand is cheaper than finding out which browser disagrees.
 
-The editor is ~145 kB gzipped and loads as its own chunk, behind `/write` and
-`/notes/<id>/edit`. Nobody reading a note pays for it.
+The editor is ~145 kB gzipped and loads as its own chunk, behind `/notes/new`
+and `/notes/<id>/edit`. Nobody reading a note pays for it.
+
+Those sit under `/notes` with the reading route rather than off on a path of
+their own. React Router ranks a static segment above a dynamic one, so
+`/notes/new` wins over `/notes/:noteId` whatever order they are declared in --
+but that only settles which route matches, not whether a real note is shadowed
+by it. `RESERVED_NOTE_IDS` settles that: `new` and `edit` are never minted as
+note ids, so no note can exist at a URL that means something else. Refusing two
+ids is cheaper than a router special case, and it is one line at the only place
+ids are made.
 
 ## Pairing a device
 

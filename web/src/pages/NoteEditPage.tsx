@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { adminApi } from '../lib/api';
 import { useCatalog } from '../lib/CatalogProvider';
 import { fromEditorHtml, isEditable, toEditorHtml } from '../lib/note-editing';
+import { RESERVED_NOTE_IDS } from '../lib/notes';
 import { slugify, uniqueId } from '../lib/slug';
 import type { Catalog, Note } from '../lib/types';
 
@@ -295,5 +296,8 @@ export function NoteEditPage() {
  * but a title made only of punctuation still gets a usable id.
  */
 function uniqueNoteId(name: string, catalog: Catalog, fallback: string): string {
-  return uniqueId(slugify(name) || fallback, (catalog.notes ?? []).map((note) => note.id));
+  return uniqueId(slugify(name) || fallback, [
+    ...(catalog.notes ?? []).map((note) => note.id),
+    ...RESERVED_NOTE_IDS,
+  ]);
 }

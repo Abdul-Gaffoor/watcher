@@ -62,10 +62,9 @@ async function cleanup() {
   await rm(resolve(repoRoot, 'content/media/_e2e'), { recursive: true, force: true });
   // Written by the editor steps, into the same place a deployment's bucket
   // would hold it.
-  await rm(resolve(repoRoot, 'content/media/notes/fibonacci-retracements'), {
-    recursive: true,
-    force: true,
-  });
+  for (const id of ['fibonacci-retracements', 'new-2']) {
+    await rm(resolve(repoRoot, 'content/media/notes', id), { recursive: true, force: true });
+  }
 }
 
 const results = [];
@@ -422,7 +421,7 @@ try {
       ['pairing', '/pair'],
       // The editor arrives as its own chunk, so there is something to wait for
       // beyond the network going quiet -- otherwise this measures a spinner.
-      ['write', '/write', '.editor__surface'],
+      ['write', '/notes/new', '.editor__surface'],
     ];
 
     const broken = [];
@@ -615,7 +614,7 @@ try {
   // ---------------------------------------------------- writing a note --
 
   await step('a note can be written in the app, into a collection made as you go', async () => {
-    await page.goto(`${BASE}/write`, { waitUntil: 'networkidle' });
+    await page.goto(`${BASE}/notes/new`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.editor__surface', { timeout: 20_000 });
 
     await page.fill('.note-edit__title', 'Fibonacci retracements');
@@ -745,6 +744,30 @@ try {
     assert.equal(notes.length, 1, 'editing should not have added a second note');
     assert.equal(notes[0].format, 'md');
     assert.equal(notes[0].collectionId, 'scratch-notes');
+  });
+
+  await step('a note called New does not take the id the editor lives at', async () => {
+    // /notes/new writes one, so a note whose id was `new` would be a note at a
+    // URL that means something else. The id is refused rather than the router
+    // being taught an exception.
+    await page.goto(`${BASE}/notes/new`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+
+    await page.fill('.note-edit__title', 'New');
+    await page.selectOption('.note-edit__filing select', 'scratch-notes');
+    await page.locator('.editor__surface').click();
+    await page.keyboard.type('Filed under a name that would have collided.');
+    await page.click('button:has-text("Create note")');
+
+    await page.waitForURL(/\/notes\/new-\d+$/, { timeout: 20_000 });
+    await page.waitForSelector('.prose', { timeout: 15_000 });
+    assert.match(await page.textContent('.note__title'), /^New$/);
+
+    // And the editor is still what /notes/new means.
+    await page.goto(`${BASE}/notes/new`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+    assert.equal(await page.locator('.note-edit__error').count(), 0);
+    assert.equal(await page.inputValue('.note-edit__title'), '');
   });
 
   await step('a collapsible section survives being stored as Markdown', async () => {

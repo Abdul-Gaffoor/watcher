@@ -44,11 +44,12 @@ export default function App() {
             <Route path="admin" element={<AdminPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="watch/:titleId" element={<WatchPage />} />
+            {/* Notes, all under the one path. `new` ranks above `:noteId`
+                whatever the order here, and no note is ever given `new` or
+                `edit` as an id -- see RESERVED_NOTE_IDS -- so no note ends up
+                at a URL that means something else. */}
+            <Route path="notes/new" element={<NoteEditPage />} />
             <Route path="notes/:noteId" element={<NotePage />} />
-            {/* Writing a note. `/write` rather than `/notes/new`, because a note
-                titled "New" would take the id `new` and then the two routes
-                would be the same URL. */}
-            <Route path="write" element={<NoteEditPage />} />
             <Route path="notes/:noteId/edit" element={<NoteEditPage />} />
           </Route>
         </Route>
