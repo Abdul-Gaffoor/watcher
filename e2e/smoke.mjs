@@ -278,6 +278,34 @@ try {
     }
   });
 
+  await step('leaving search stays left, rather than bouncing back to it', async () => {
+    // Reported from a screen recording: Back from the search page reached the
+    // collection and was immediately thrown back to search, over and over.
+    // Typing set a flag that was never cleared, and the pathname was a
+    // dependency -- so every navigation looked like another reason to search.
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.hero__title');
+
+    await page.type('#site-search', 'trading', { delay: 25 });
+    await page.waitForURL(/\/search/, { timeout: 10_000 });
+    await page.waitForSelector('.result__name, .card', { timeout: 10_000 });
+
+    // Leave by following a result rather than by Back, so this covers the
+    // general case and not just the one button.
+    await page.click('.result');
+    await page.waitForURL(/\/c\//, { timeout: 10_000 });
+
+    // Long enough that a rescheduled navigation would have fired by now.
+    await page.waitForTimeout(900);
+    assert.match(page.url(), /\/c\//, `bounced back to ${page.url()}`);
+
+    // And Back from there returns to the search, once, and stays.
+    await page.goBack();
+    await page.waitForURL(/\/search/, { timeout: 10_000 });
+    await page.waitForTimeout(900);
+    assert.match(page.url(), /\/search/, `bounced away to ${page.url()}`);
+  });
+
   await step('a search with no matches shows an empty state', async () => {
     await page.goto(`${BASE}/search?q=zzzznotathing`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.row__empty');

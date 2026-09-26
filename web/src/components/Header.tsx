@@ -23,26 +23,51 @@ export function Header() {
   useEffect(() => setQuery(searchParams.get('q') ?? ''), [searchParams]);
 
   /**
+   * What the viewer last typed, and nothing else. Held in a ref rather than
+   * state because it must not itself cause a render, and cleared the moment it
+   * is acted on or the moment the viewer goes somewhere.
+   */
+  const pending = useRef<string | null>(null);
+
+  /**
+   * Any navigation cancels a pending search.
+   *
+   * Without this, leaving the search page re-ran the effect below while the
+   * "the viewer is typing" flag was still set, and it pushed them straight
+   * back to /search -- so Back bounced between the search page and wherever
+   * you had just reached, forever. Declared before that effect so it has
+   * already cleared the flag by the time it runs.
+   */
+  useEffect(() => {
+    pending.current = null;
+  }, [location.key]);
+
+  /**
    * Results as you type. The catalog is already in memory, so there is nothing
    * to wait for and no reason to make somebody press Enter to find out whether
    * a word matches anything.
    *
    * The first keystroke pushes a history entry and the rest replace it, so
    * Back returns to wherever the search started rather than walking one
-   * character at a time.
+   * character at a time. The pathname is read through a ref: as a dependency
+   * it made every navigation look like a reason to search again.
    */
-  const typing = useRef(false);
+  const pathRef = useRef(location.pathname);
+  pathRef.current = location.pathname;
+
   useEffect(() => {
-    if (!typing.current) return;
-    const onSearch = location.pathname === '/search';
+    if (pending.current === null || pending.current !== query) return;
+
     const timer = window.setTimeout(() => {
-      const trimmed = query.trim();
+      const trimmed = (pending.current ?? '').trim();
+      pending.current = null;
       navigate(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : '/search', {
-        replace: onSearch,
+        replace: pathRef.current === '/search',
       });
     }, 180);
+
     return () => window.clearTimeout(timer);
-  }, [query, navigate, location.pathname]);
+  }, [query, navigate]);
 
   const railItem = ({ isActive }: { isActive: boolean }) =>
     isActive ? 'rail__item is-active' : 'rail__item';
@@ -117,7 +142,7 @@ export function Header() {
           placeholder="Search for a title"
           value={query}
           onChange={(event) => {
-            typing.current = true;
+            pending.current = event.target.value;
             setQuery(event.target.value);
           }}
         />
@@ -131,7 +156,7 @@ export function Header() {
             type="button"
             title="Clear search"
             onClick={() => {
-              typing.current = true;
+              pending.current = '';
               setQuery('');
             }}
           >
