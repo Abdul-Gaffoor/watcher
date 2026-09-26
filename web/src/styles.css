@@ -3181,6 +3181,91 @@ img {
   text-decoration: line-through;
 }
 
+/* ---------- Collapsible sections ---------- */
+
+/* Two shapes, one look: a real <details> when read, and a plain div while
+   written, because a section that can collapse out from under the cursor is a
+   section you cannot edit. */
+.prose details,
+.prose [data-type='details'] {
+  margin: 1.5em 0;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(245, 242, 236, 0.03);
+}
+
+.prose summary,
+.prose [data-type='detailsSummary'] {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 12px 0;
+  margin: 0;
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 15px;
+  font-weight: 600;
+  list-style: none;
+  cursor: pointer;
+}
+
+/* The native triangle sits at a different place in every browser, so it is
+   replaced by one that turns. */
+.prose summary::-webkit-details-marker {
+  display: none;
+}
+
+.prose summary::before,
+.prose [data-type='detailsSummary']::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  margin-top: 0.42em;
+  border-left: 5px solid var(--accent);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 140ms ease;
+}
+
+.prose details[open] > summary::before,
+.prose [data-type='detailsSummary']::before {
+  transform: rotate(90deg) translateX(1px);
+}
+
+.prose summary:hover {
+  color: var(--accent);
+}
+
+.prose [data-type='detailsContent'],
+.prose details > :not(summary) {
+  padding-bottom: 6px;
+}
+
+/* First and last child margins would otherwise show through the panel. */
+.prose [data-type='detailsContent'] > :first-child,
+.prose details > summary + * {
+  margin-top: 0;
+}
+
+.prose [data-type='detailsContent'] > :last-child {
+  margin-bottom: 0;
+}
+
+/* In the editor the title is typed into, so it is not a pointer. */
+.editor__surface [data-type='detailsSummary'] {
+  cursor: text;
+}
+
+/* An empty title, before it has been given one. */
+.editor__surface [data-type='detailsSummary'].is-empty::after {
+  content: attr(data-placeholder);
+  color: var(--text-faint);
+  font-weight: 400;
+  pointer-events: none;
+}
+
 @media (max-width: 860px) {
   /* Under the mobile header, which is shorter. */
   .tb {

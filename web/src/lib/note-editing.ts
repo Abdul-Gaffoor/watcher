@@ -5,12 +5,16 @@ import type { Note } from './types';
 /**
  * Turning what the editor holds into what gets stored, and back.
  *
- * The editor is rich — headings, tables, checklists, images — but what it
- * produces is stored as **Markdown**, not as the editor's HTML. Markdown is
- * portable, diffable, readable without this app, and every one of the
- * toolbar's features maps onto GitHub-flavoured Markdown. Storing the
+ * The editor is rich — headings, tables, checklists, images, collapsible
+ * sections — but what it produces is stored as **Markdown**, not as the
+ * editor's HTML. Markdown is portable, diffable, readable without this app, and
+ * every one of the toolbar's features has a spelling in it. Storing the
  * editor's own HTML would tie every note written here to whichever editor
  * happened to be installed the day it was written.
+ *
+ * A collapsible section is the one that has no Markdown *syntax*, so it is
+ * written as the HTML that Markdown allows and every renderer understands. That
+ * is still Markdown's own escape hatch rather than an editor's private format.
  *
  * The one exception is a note that is already HTML — anything converted from a
  * .docx. Editing it keeps it as HTML rather than quietly rewriting somebody's
@@ -72,10 +76,39 @@ export async function fromEditorHtml(
     replacement: (_content, node) => `\n\n${tableToMarkdown(node as HTMLTableElement)}\n\n`,
   });
 
+  /**
+   * A collapsible section is stored as the HTML that Markdown allows and every
+   * renderer already understands. The body is converted on its own so it stays
+   * Markdown -- the blank lines around it are what make a reader parse it as
+   * Markdown rather than pass it through as text.
+   */
+  turndown.addRule('details', {
+    filter: (node) =>
+      node.nodeName === 'DETAILS' ||
+      (node.nodeName === 'DIV' && node.getAttribute('data-type') === 'details'),
+    replacement: (_content, node) => {
+      const element = node as HTMLElement;
+      const summary = element.querySelector(':scope > summary, :scope > [data-type="detailsSummary"]');
+      const body = element.querySelector(':scope > [data-type="detailsContent"]');
+
+      // A summary is one line of plain text, so what it says is all there is to
+      // carry over; `<` and `&` in it would otherwise become markup.
+      const title = escapeHtmlText((summary?.textContent ?? 'Details').trim() || 'Details');
+      const inner = body ? turndown.turndown(body.innerHTML).trim() : '';
+
+      return `\n\n<details>\n<summary>${title}</summary>\n\n${inner}\n\n</details>\n\n`;
+    },
+  });
+
   return {
     blob: new Blob([turndown.turndown(html)], { type: 'text/markdown; charset=utf-8' }),
     extension: 'md',
   };
+}
+
+/** The three characters that would otherwise be read as markup. */
+function escapeHtmlText(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**

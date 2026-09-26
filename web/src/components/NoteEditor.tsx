@@ -7,6 +7,7 @@ import { TaskList } from '@tiptap/extension-task-list';
 import { TaskItem } from '@tiptap/extension-task-item';
 import { Image } from '@tiptap/extension-image';
 import { uploadNoteImage } from '../lib/note-editing';
+import { Details, DetailsContent, DetailsSummary, EMPTY_DETAILS, emptySummaryAfter } from './details';
 
 /**
  * The writing surface.
@@ -73,6 +74,14 @@ function Toolbar({ editor, noteId, onError }: { editor: Editor; noteId: string; 
     };
     input.click();
   }, [editor, noteId, onError]);
+
+  const addSection = useCallback(() => {
+    const from = editor.state.selection.from;
+    editor.chain().focus().insertContent(EMPTY_DETAILS).run();
+
+    const title = emptySummaryAfter(editor.state.doc, from);
+    if (title !== null) editor.commands.focus(title);
+  }, [editor]);
 
   const setLink = useCallback(() => {
     const previous = editor.getAttributes('link').href ?? '';
@@ -159,6 +168,9 @@ function Toolbar({ editor, noteId, onError }: { editor: Editor; noteId: string; 
       <Button label="Image" onClick={pickImage}>
         ▣
       </Button>
+      <Button label="Collapsible section" active={editor.isActive('details')} onClick={addSection}>
+        ▾
+      </Button>
 
       <span className="tb__rule" />
 
@@ -178,11 +190,19 @@ export function NoteEditor({ noteId, initialHtml, onChange, onError }: Props) {
       StarterKit.configure({ link: { openOnClick: false } }),
       // An empty document otherwise gives no sign that it is the thing to type
       // into, which on a page with no border around it is most of the problem.
-      Placeholder.configure({ placeholder: 'Start writing…' }),
+      // A section's empty title needs saying out loud for the same reason.
+      Placeholder.configure({
+        includeChildren: true,
+        placeholder: ({ node }) =>
+          node.type.name === 'detailsSummary' ? 'Section title' : 'Start writing…',
+      }),
       TableKit.configure({ table: { resizable: true } }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Image,
+      Details,
+      DetailsSummary,
+      DetailsContent,
     ],
     content: initialHtml,
     // The prose class is the reader's, deliberately: what you type should look

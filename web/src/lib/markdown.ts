@@ -3,7 +3,8 @@
  *
  * One module for both, because a note has to come out of storage looking the
  * same whether it is about to be read or about to be changed -- and because the
- * checklist fix below is needed in both places and is easy to apply in only one.
+ * two reconciliations below are needed in both places and are easy to apply in
+ * only one.
  */
 
 /**
@@ -64,7 +65,41 @@ function normaliseTaskLists(html: string): string {
   return holder.innerHTML;
 }
 
-/** Parses Markdown, reconciles checklists, and sanitises what comes out. */
+/**
+ * Gives a collapsible section the shape both the reader and the editor expect.
+ *
+ * Stored Markdown holds a `<details>` with a `<summary>` and then loose blocks.
+ * The editor's section has a body node around those blocks, and guessing where
+ * one should go is the parser's least reliable job -- so it is put there here,
+ * once, and the reader gets the same element to style.
+ */
+function normaliseDetails(html: string): string {
+  const holder = document.createElement('div');
+  holder.innerHTML = html;
+
+  // Innermost first, so wrapping a section does not disturb one inside it.
+  for (const section of [...holder.querySelectorAll('details')].reverse()) {
+    let summary = section.querySelector(':scope > summary');
+    if (!summary) {
+      summary = document.createElement('summary');
+      summary.textContent = 'Details';
+      section.prepend(summary);
+    }
+
+    if (section.querySelector(':scope > div[data-type="detailsContent"]')) continue;
+
+    const body = document.createElement('div');
+    body.setAttribute('data-type', 'detailsContent');
+    while (summary.nextSibling) body.append(summary.nextSibling);
+    // A section with nothing in it is still a section; give it somewhere to type.
+    if (!body.firstElementChild) body.append(document.createElement('p'));
+    section.append(body);
+  }
+
+  return holder.innerHTML;
+}
+
+/** Parses Markdown, reconciles checklists and sections, and sanitises it. */
 export async function renderMarkdown(text: string): Promise<string> {
   const [{ marked }, { default: DOMPurify }] = await Promise.all([
     import('marked'),
@@ -72,7 +107,9 @@ export async function renderMarkdown(text: string): Promise<string> {
   ]);
 
   const html = await marked.parse(text, { gfm: true, breaks: false });
-  return DOMPurify.sanitize(normaliseTaskLists(html), { USE_PROFILES: { html: true } });
+  return DOMPurify.sanitize(normaliseDetails(normaliseTaskLists(html)), {
+    USE_PROFILES: { html: true },
+  });
 }
 
 /**
@@ -83,5 +120,7 @@ export async function renderMarkdown(text: string): Promise<string> {
  */
 export async function sanitiseHtml(html: string): Promise<string> {
   const { default: DOMPurify } = await import('dompurify');
-  return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+  // Sections get the same treatment, so an imported document that happens to
+  // contain one is editable rather than only readable.
+  return DOMPurify.sanitize(normaliseDetails(html), { USE_PROFILES: { html: true } });
 }

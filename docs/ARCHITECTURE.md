@@ -97,10 +97,10 @@ deliberate:
   text, and every feature the toolbar offers has a GitHub-flavoured spelling.
   The editor's own HTML would tie each note to whichever editor was installed
   the day it was written.
-- Turndown covers most of it, and three things it does not: strikethrough,
-  checklists (`- [x]`), and tables, which it flattens into a paragraph. A table
-  is one of the reasons to have a rich editor at all, so it is written out by
-  hand in `note-editing.ts`.
+- Turndown covers most of it, and four things it does not: strikethrough,
+  checklists (`- [x]`), tables, which it flattens into a paragraph, and
+  collapsible sections. A table is one of the reasons to have a rich editor at
+  all, so all four are written out by hand in `note-editing.ts`.
 - A note already stored as HTML — anything converted from a `.docx` — stays
   HTML when edited. Rewriting somebody's imported document into another format
   behind their back is not an upgrade.
@@ -118,6 +118,29 @@ into it is stored under that id. The page settles one on mount and keeps it, so
 a draft's images and the saved note agree. The id itself comes from the title
 when it is first saved, and never changes after: it is the URL and the storage
 prefix, so a rename moves no bytes.
+
+### Collapsible sections
+
+Markdown has no syntax for one, so what is stored is the HTML it allows:
+`<details>` with a `<summary>`, a blank line, the body as Markdown, a blank
+line, `</details>`. The blank lines end the HTML block, which is what makes the
+body parse as Markdown in any renderer rather than come through as text.
+
+Three ProseMirror nodes, not one: `details` holding a `detailsSummary` (one
+line, no marks — that is what a summary is) and a `detailsContent` (anything,
+including another section). The ready-made TipTap extension for this is a paid
+Pro one; these are about eighty lines.
+
+In the editor a section renders as a `div`, not a `<details>`. A real one
+collapses when its summary is clicked, and a section that can collapse out from
+under the cursor is a section that cannot be edited. It becomes a `<details>` on
+the way to storage, and a reader gets the native element with its own keyboard
+handling and find-in-page behaviour.
+
+`normaliseDetails` in `lib/markdown.ts` puts the body wrapper in on the way in,
+for the same reason the checklist reconciliation is there: deciding where an
+implicit wrapper belongs is the DOM parser's least reliable job, and doing it
+once by hand is cheaper than finding out which browser disagrees.
 
 The editor is ~145 kB gzipped and loads as its own chunk, behind `/write` and
 `/notes/<id>/edit`. Nobody reading a note pays for it.

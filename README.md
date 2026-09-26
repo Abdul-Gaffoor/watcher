@@ -93,7 +93,7 @@ Then add or update the matching entry in `content/catalog.json`.
 
 ```bash
 npm test                   # 153 backend unit tests (auth, JWT, cookie signing)
-npm run e2e                # 49 browser tests: sign-in, browse, search, playback,
+npm run e2e                # 52 browser tests: sign-in, browse, search, playback,
                            # notes, writing, the dashboard, device pairing
 npm run typecheck          # strict TypeScript
 ```
@@ -256,12 +256,32 @@ the Notes panel, reopens it at `/notes/<id>/edit`.
 The editor is rich rather than a Markdown box, because knowing the syntax
 should not be the price of writing something down. It has headings, bold,
 italic, strikethrough, inline code, links, bulleted and numbered lists,
-checklists, quotes, code blocks, dividers, tables and images — pasted
-screenshots included, which is the common case for a chart. What it stores is
-still **Markdown**: portable, diffable, readable without this app, and every
-one of those features has a GitHub-flavoured spelling. Storing the editor's own
-HTML would tie every note written here to whichever editor was installed the
+checklists, quotes, code blocks, dividers, tables, images — pasted screenshots
+included, which is the common case for a chart — and **collapsible sections**,
+for the long working-out that should not be in the way of the conclusion.
+
+What it stores is still **Markdown**: portable, diffable, readable without this
+app, and every one of those features has a spelling in it. Storing the editor's
+own HTML would tie every note written here to whichever editor was installed the
 day it was written.
+
+A collapsible section is the one feature Markdown has no syntax for, so it is
+stored as the HTML that Markdown allows and that GitHub, Confluence and every
+other renderer already understands:
+
+```markdown
+<details>
+<summary>Why the count matters</summary>
+
+A wrong count is a wrong entry. Still **Markdown** in here.
+
+</details>
+```
+
+The blank lines are load-bearing: an HTML block ends at a blank line, so the
+body between them is parsed as Markdown rather than passed through as text.
+Reading the file outside the app, you get a heading you can skip and a body you
+can read — which is the same thing the section does on screen.
 
 The one exception is a note that is already HTML, meaning one converted from a
 `.docx`. Editing it keeps it as HTML rather than quietly rewriting somebody's

@@ -747,6 +747,72 @@ try {
     assert.equal(notes[0].collectionId, 'scratch-notes');
   });
 
+  await step('a collapsible section survives being stored as Markdown', async () => {
+    await page.goto(`${BASE}/notes/fibonacci-retracements/edit`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+    await page.locator('.editor__surface').click();
+    await page.keyboard.press('Control+End');
+
+    // The cursor lands in the empty title, and Enter carries on into the body
+    // rather than making a second line of title.
+    await page.click('.tb__button[aria-label="Collapsible section"]');
+    await page.keyboard.type('Why the count matters');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Because a wrong count is a wrong entry.');
+
+    const shape = await page.evaluate(() => ({
+      summary: document.querySelector('.editor__surface [data-type="detailsSummary"]')?.textContent,
+      body: document.querySelector('.editor__surface [data-type="detailsContent"]')?.textContent,
+    }));
+    assert.equal(shape.summary, 'Why the count matters');
+    assert.equal(shape.body, 'Because a wrong count is a wrong entry.');
+
+    await page.click('button:has-text("Save")');
+    await page.waitForURL(/\/notes\/fibonacci-retracements$/, { timeout: 20_000 });
+    await page.waitForSelector('.prose details', { timeout: 15_000 });
+
+    // Stored as the HTML that Markdown allows, with the blank lines that make a
+    // reader parse the body as Markdown instead of passing it through.
+    const stored = await page.evaluate(async () => {
+      const response = await fetch('/media/notes/fibonacci-retracements/source.md', { cache: 'no-store' });
+      return response.text();
+    });
+    assert.match(stored, /<details>\n<summary>Why the count matters<\/summary>\n\nBecause a wrong count is a wrong entry\.\n\n<\/details>/);
+    // The rest of the note is still Markdown, not swallowed by the HTML block.
+    assert.match(stored, /^## The levels that matter$/m);
+    assert.match(stored, /^- \[ \] Wait for the retest$/m);
+
+    // A reader gets a real disclosure: shut until asked, and the sanitiser did
+    // not strip it on the way in.
+    const disclosure = page.locator('.prose details');
+    assert.equal(await disclosure.evaluate((el) => el.open), false, 'it should start closed');
+    assert.match(await page.textContent('.prose summary'), /Why the count matters/);
+
+    await page.locator('.prose summary').click();
+    assert.equal(await disclosure.evaluate((el) => el.open), true, 'clicking the title should open it');
+    assert.match(await disclosure.textContent(), /Because a wrong count is a wrong entry\./);
+
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/10-collapsible.png`, fullPage: true });
+  });
+
+  await step('a section comes back as a section, not as its own markup', async () => {
+    await page.goto(`${BASE}/notes/fibonacci-retracements/edit`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.editor__surface', { timeout: 20_000 });
+    await page.waitForTimeout(400);
+
+    const reopened = await page.evaluate(() => ({
+      sections: document.querySelectorAll('.editor__surface [data-type="details"]').length,
+      summary: document.querySelector('.editor__surface [data-type="detailsSummary"]')?.textContent,
+      body: document.querySelector('.editor__surface [data-type="detailsContent"] p')?.textContent,
+      // If the round trip had failed, the tags themselves would be on screen.
+      raw: document.querySelector('.editor__surface').textContent.includes('<details>'),
+    }));
+    assert.equal(reopened.sections, 1);
+    assert.equal(reopened.summary, 'Why the count matters');
+    assert.equal(reopened.body, 'Because a wrong count is a wrong entry.');
+    assert.equal(reopened.raw, false, 'the markup should not be visible as text');
+  });
+
   await step('an image put in a note is stored under that note', async () => {
     await page.goto(`${BASE}/notes/fibonacci-retracements/edit`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.editor__surface', { timeout: 20_000 });
