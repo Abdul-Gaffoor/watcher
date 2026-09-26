@@ -2588,3 +2588,26 @@ img {
   color: var(--text-muted);
   font-size: 13.5px;
 }
+
+/* A way out of a page that has no breadcrumb to offer. Sized and placed like
+   one, so it reads as part of the same system rather than a stray button. */
+.backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px -8px;
+  padding: 6px 12px 6px 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.backlink:hover {
+  background: rgba(245, 242, 236, 0.06);
+  color: var(--text);
+}

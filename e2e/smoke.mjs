@@ -243,6 +243,41 @@ try {
     assert.equal(await page.locator('#site-search').inputValue(), '');
   });
 
+  await step('search offers a way back, and is not a dead end when empty', async () => {
+    // Every other page carries a breadcrumb; this one has nothing to say it
+    // came from, so without this the only way out was a small unlabelled icon
+    // in the rail.
+    await page.goto(`${BASE}/`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.hero__title');
+
+    await page.click('#site-search');
+    await page.type('#site-search', 'gaurdeer', { delay: 25 });
+    await page.waitForURL(/\/search/, { timeout: 10_000 });
+
+    await page.click('.backlink');
+    await page.waitForSelector('.hero__title', { timeout: 10_000 });
+    assert.match(page.url(), new RegExp(`^${BASE}/?$`), 'Back should return where the search began');
+
+    // Opened cold, with no history behind it, Back goes home rather than out
+    // of the app entirely.
+    const fresh = await browser.newContext();
+    try {
+      const cold = await fresh.newPage();
+      await cold.goto(`${BASE}/search`, { waitUntil: 'networkidle' });
+      await cold.waitForURL(/\/login$/);
+      await cold.fill('input[name="username"]', USERNAME);
+      await cold.fill('input[name="password"]', PASSWORD);
+      await cold.click('button[type="submit"]');
+
+      // With no query the page lists the library rather than showing one word
+      // on an empty screen.
+      await cold.waitForSelector('.results__list .result', { timeout: 15_000 });
+      assert.ok((await cold.locator('.results__list .result').count()) > 0);
+    } finally {
+      await fresh.close();
+    }
+  });
+
   await step('a search with no matches shows an empty state', async () => {
     await page.goto(`${BASE}/search?q=zzzznotathing`, { waitUntil: 'networkidle' });
     await page.waitForSelector('.row__empty');
