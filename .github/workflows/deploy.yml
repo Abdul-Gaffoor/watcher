@@ -113,6 +113,19 @@ jobs:
           aws s3 sync web/dist "s3://${{ needs.terraform.outputs.app_bucket }}" \
             --delete \
             --exclude 'index.html' \
+            --exclude '*.woff2' \
+            --cache-control 'public, max-age=31536000, immutable'
+
+      # Separately, because S3 guesses a content type from the extension and
+      # does not know this one. Browsers take the format() hint in the CSS over
+      # the header, so this is belt and braces rather than a fix -- but an
+      # octet-stream font is the kind of thing that breaks in one browser only.
+      - name: Upload fonts
+        run: |
+          aws s3 sync web/dist "s3://${{ needs.terraform.outputs.app_bucket }}" \
+            --exclude '*' \
+            --include '*.woff2' \
+            --content-type 'font/woff2' \
             --cache-control 'public, max-age=31536000, immutable'
 
       # index.html names the hashed bundles, so it must always be revalidated —

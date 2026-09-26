@@ -11,7 +11,7 @@ import { Spinner } from '../components/Spinner';
 import { useAuth } from '../auth/AuthProvider';
 import { adminApi } from '../lib/api';
 import { capturePoster } from '../lib/poster';
-import { uploadPoster, uploadVideo } from '../lib/uploads';
+import { backfillPoster, uploadPoster, uploadVideo } from '../lib/uploads';
 import type { Catalog, Collection, Title } from '../lib/types';
 
 /**
@@ -104,6 +104,7 @@ export function AdminPage() {
   const [videoTitle, setVideoTitle] = useState('');
   const [videoCollection, setVideoCollection] = useState('');
   const [progress, setProgress] = useState<number | null>(null);
+  const [backfill, setBackfill] = useState<{ done: number; total: number } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -330,6 +331,61 @@ export function AdminPage() {
     mutate({ titles });
   };
 
+  /**
+   * Artwork for everything uploaded before frame capture existed.
+   *
+   * Every one of those titles falls back to generated art, which is why a
+   * library of them reads as a wall of coloured rectangles. The browser seeks
+   * into each video in the bucket and takes a real frame -- a seek is a range
+   * request, so this costs a few hundred kilobytes per title rather than the
+   * whole lesson -- and picks up the runtime on the way past, which is
+   * otherwise zero for all of them.
+   *
+   * One title that will not decode is skipped rather than fatal.
+   */
+  const needArtwork = catalog.titles.filter((title) => !title.poster && title.sources?.mp4);
+
+  const runBackfill = async () => {
+    setError(null);
+    setNotice(null);
+    setBackfill({ done: 0, total: needArtwork.length });
+
+    const found = new Map<string, { poster: string | null; durationSec: number }>();
+    for (const [index, title] of needArtwork.entries()) {
+      try {
+        const result = await backfillPoster(title.id, title.sources.mp4 as string);
+        if (result) found.set(title.id, result);
+      } catch {
+        /* Skipped: this browser could not decode it. */
+      }
+      setBackfill({ done: index + 1, total: needArtwork.length });
+    }
+
+    setBackfill(null);
+
+    if (found.size === 0) {
+      setError('No frames could be read. The videos may be in a codec this browser cannot decode.');
+      return;
+    }
+
+    const titles = catalog.titles.map((title) => {
+      const result = found.get(title.id);
+      if (!result) return title;
+      return {
+        ...title,
+        ...(result.poster ? { poster: result.poster, backdrop: result.poster } : {}),
+        durationSec: title.durationSec > 0 ? title.durationSec : result.durationSec,
+      };
+    });
+
+    await save({ titles });
+    setNotice(
+      found.size === needArtwork.length
+        ? `Artwork made for ${found.size} ${found.size === 1 ? 'video' : 'videos'}.`
+        : `Artwork made for ${found.size} of ${needArtwork.length}. The rest could not be decoded here.`,
+    );
+  };
+
   /** Refiles a video. Also just one field: the video itself does not move. */
   const moveTitle = (id: string, collectionId: string) =>
     mutate({
@@ -542,7 +598,21 @@ export function AdminPage() {
       </section>
 
       <section className="admin__panel">
-        <h2>Videos</h2>
+        <header className="admin__panel-head">
+          <h2>Videos</h2>
+          {needArtwork.length > 0 && (
+            <button
+              className="admin__sort"
+              type="button"
+              disabled={backfill !== null || saving}
+              onClick={() => void runBackfill()}
+            >
+              {backfill
+                ? `Making artwork… ${backfill.done}/${backfill.total}`
+                : `Make artwork for ${needArtwork.length} ${needArtwork.length === 1 ? 'video' : 'videos'}`}
+            </button>
+          )}
+        </header>
         {catalog.titles.length === 0 ? (
           <p className="row__empty">Nothing uploaded yet.</p>
         ) : (

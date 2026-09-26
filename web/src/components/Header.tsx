@@ -27,11 +27,10 @@ export function Header() {
   return (
     <>
       <aside className="rail">
+        {/* The product's name, in the display face. Four anonymous squares
+            said nothing; a library ought to be willing to sign itself. */}
         <Link className="rail__mark" to="/" aria-label="Watcher home">
-          <span aria-hidden="true" />
-          <span aria-hidden="true" />
-          <span aria-hidden="true" />
-          <span aria-hidden="true" />
+          <span aria-hidden="true">W</span>
         </Link>
 
         <nav className="header__nav rail__nav" aria-label="Library">

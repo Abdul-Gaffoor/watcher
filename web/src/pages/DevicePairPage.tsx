@@ -159,6 +159,7 @@ export function DevicePairPage() {
 
   return (
     <div className="page page--centered pair">
+      <p className="wordmark pair__brand">Watcher</p>
       <h1 className="pair__title">Sign in with your phone</h1>
       <p className="pair__lead">
         Scan this with a phone that is already signed in, and approve the request.

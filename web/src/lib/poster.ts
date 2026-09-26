@@ -52,14 +52,32 @@ function looksBlank(context: CanvasRenderingContext2D, width: number, height: nu
   return max - min < 12;
 }
 
+/**
+ * The same grab, from a video already in the bucket.
+ *
+ * Anything uploaded before frame capture existed has no artwork, and asking
+ * for gigabytes to be re-uploaded to get a thumbnail is not a fix. The browser
+ * seeks into the file instead: a seek is a range request, so this costs a few
+ * hundred kilobytes rather than the whole lesson.
+ *
+ * Same-origin, so the canvas is not tainted and the session cookie rides along
+ * exactly as it does for playback.
+ */
+export function capturePosterFromUrl(src: string): Promise<CapturedPoster | null> {
+  return grabFrame(src, false);
+}
+
 export async function capturePoster(file: File): Promise<CapturedPoster | null> {
-  const url = URL.createObjectURL(file);
+  return grabFrame(URL.createObjectURL(file), true);
+}
+
+async function grabFrame(url: string, revoke: boolean): Promise<CapturedPoster | null> {
   const video = document.createElement('video');
   video.preload = 'metadata';
   video.muted = true;
   // Required by Safari, which will not decode into a canvas from a file it
   // considers cross-origin without it.
-  video.crossOrigin = 'anonymous';
+  video.crossOrigin = 'use-credentials';
   video.src = url;
 
   const timeout = new Promise<null>((resolve) => window.setTimeout(() => resolve(null), DECODE_TIMEOUT_MS));
@@ -104,6 +122,6 @@ export async function capturePoster(file: File): Promise<CapturedPoster | null> 
   } finally {
     video.removeAttribute('src');
     video.load();
-    URL.revokeObjectURL(url);
+    if (revoke) URL.revokeObjectURL(url);
   }
 }

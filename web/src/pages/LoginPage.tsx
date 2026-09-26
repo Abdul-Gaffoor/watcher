@@ -111,10 +111,7 @@ export function LoginPage() {
   const shell = (children: ReactNode, onSubmit: (event: FormEvent) => void) => (
     <main className="login">
       <form className="login__card" onSubmit={onSubmit}>
-        <h1 className="login__brand">
-          <span className="header__mark" aria-hidden="true" />
-          Watcher
-        </h1>
+        <h1 className="login__brand wordmark">Watcher</h1>
         {children}
         {error && (
           <p className="login__error" role="alert">

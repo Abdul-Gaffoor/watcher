@@ -146,3 +146,23 @@ export async function uploadPoster(titleId: string, blob: Blob): Promise<string 
     return null;
   }
 }
+
+/**
+ * Artwork for a title that already has a video in the bucket.
+ *
+ * The duration comes back with it, because it is read off the same element and
+ * anything uploaded before frame capture existed has a durationSec of zero --
+ * so a backfill can fix the runtime as well as the picture.
+ *
+ * Returns null rather than throwing: a thumbnail is a nicety, and one title
+ * this browser cannot decode must not stop the rest of the run.
+ */
+export async function backfillPoster(
+  titleId: string,
+  videoSrc: string,
+): Promise<{ poster: string | null; durationSec: number } | null> {
+  const { capturePosterFromUrl } = await import('./poster');
+  const captured = await capturePosterFromUrl(videoSrc);
+  if (!captured) return null;
+  return { poster: await uploadPoster(titleId, captured.blob), durationSec: captured.durationSec };
+}
