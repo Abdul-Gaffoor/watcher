@@ -1,8 +1,15 @@
 import { strict as assert } from 'node:assert';
 import test from 'node:test';
 
-import { AdminError, isAdmin, readCatalog, signUpload, writeCatalog } from '../src/admin.mjs';
-import { migrateFromV1, slugify, validateCatalog } from '../src/catalog.mjs';
+import {
+  AdminError,
+  isAdmin,
+  readCatalog,
+  signUpload,
+  storedNoteFormat,
+  writeCatalog,
+} from '../src/admin.mjs';
+import { isOwnedMediaKey, migrateFromV1, slugify, validateCatalog } from '../src/catalog.mjs';
 
 process.env.AWS_ACCESS_KEY_ID ??= 'AKIAIOSFODNN7EXAMPLE';
 process.env.AWS_SECRET_ACCESS_KEY ??= 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
@@ -11,7 +18,7 @@ const config = { mediaBucket: 'watcher-media', mediaRegion: 'us-east-1' };
 
 function catalogWith(overrides = {}) {
   return {
-    version: 2,
+    version: 3,
     revision: 1,
     collections: [
       { id: 'trading', name: 'Trading', parentId: null },
@@ -27,6 +34,7 @@ function catalogWith(overrides = {}) {
         sources: { mp4: '/media/titles/class-01/source.mp4' },
       },
     ],
+    notes: [],
     ...overrides,
   };
 }
@@ -122,11 +130,116 @@ test('a version 1 catalog comes forward with its titles intact', () => {
     ],
   });
 
-  assert.equal(migrated.version, 2);
+  assert.equal(migrated.version, 3);
   assert.equal(migrated.collections[0].parentId, null);
   assert.equal(migrated.titles[0].collectionId, 'cinema');
   assert.equal('genreIds' in migrated.titles[0], false);
   assert.deepEqual(validateCatalog(migrated), []);
+});
+
+// ----------------------------------------------------------------- notes --
+
+function noteCatalog(note) {
+  return catalogWith({
+    notes: [
+      {
+        id: 'wave-theory',
+        title: 'Wave theory, in brief',
+        collectionId: 'sweeglu',
+        format: 'md',
+        source: '/media/notes/wave-theory/source.md',
+        ...note,
+      },
+    ],
+  });
+}
+
+test('a note lives in the same tree as the videos', () => {
+  assert.deepEqual(validateCatalog(noteCatalog()), []);
+});
+
+test('a note filed under a collection that does not exist is refused', () => {
+  assert.match(
+    validateCatalog(noteCatalog({ collectionId: 'nowhere' })).join(' '),
+    /not in a collection that exists/,
+  );
+});
+
+test('a note in a format nothing can render is refused', () => {
+  // docx is converted to html before it is stored, so it is not a stored
+  // format -- accepting one would mean a note the reader cannot open.
+  assert.match(validateCatalog(noteCatalog({ format: 'docx' })).join(' '), /must be one of/);
+  assert.match(validateCatalog(noteCatalog({ format: 'exe' })).join(' '), /must be one of/);
+});
+
+test('a note pointing off our own media path is refused', () => {
+  assert.match(
+    validateCatalog(noteCatalog({ source: 'https://elsewhere.example/notes.md' })).join(' '),
+    /must be a \/media\/ path/,
+  );
+  assert.match(
+    validateCatalog(noteCatalog({ original: 'https://elsewhere.example/notes.docx' })).join(' '),
+    /must be a \/media\/ path/,
+  );
+});
+
+test('a note with no file at all is refused', () => {
+  const catalog = noteCatalog();
+  delete catalog.notes[0].source;
+  assert.match(validateCatalog(catalog).join(' '), /has no file/);
+});
+
+test('two notes may not share an id, which would make one unreachable', () => {
+  const catalog = noteCatalog();
+  catalog.notes.push({ ...catalog.notes[0], title: 'Another' });
+  assert.match(validateCatalog(catalog).join(' '), /share the id/);
+});
+
+test('a note is signed as one PUT, with a type the browser will open', () => {
+  const signed = signUpload(config, { op: 'note', noteId: 'wave-theory', extension: 'pdf' });
+
+  assert.equal(signed.key, 'media/notes/wave-theory/source.pdf');
+  assert.equal(signed.contentType, 'application/pdf');
+  assert.ok(signed.url.includes('X-Amz-Signature='));
+  assert.equal(signed.url.includes('uploadId='), false);
+});
+
+test('a note key is derived, never taken from the request', () => {
+  for (const noteId of ['../etc', 'Wave Theory', 'a/b', '']) {
+    assert.throws(() => signUpload(config, { op: 'note', noteId, extension: 'md' }), AdminError);
+  }
+
+  const signed = signUpload(config, {
+    op: 'note',
+    noteId: 'wave-theory',
+    extension: 'md',
+    key: 'media/catalog.json',
+  });
+  assert.equal(signed.key, 'media/notes/wave-theory/source.md');
+});
+
+test('an unsupported note type is refused before anything is signed', () => {
+  assert.throws(
+    () => signUpload(config, { op: 'note', noteId: 'x', extension: 'exe' }),
+    /not supported/,
+  );
+});
+
+test('a note upload is guarded by the same key check as a video', () => {
+  // The notes prefix is owned; anything else is not.
+  assert.equal(isOwnedMediaKey('media/notes/wave-theory/source.md'), true);
+  assert.equal(isOwnedMediaKey('media/notes/../catalog.json'), false);
+  assert.equal(isOwnedMediaKey('media/catalog.json'), false);
+});
+
+test('what a note is stored as depends on what was uploaded', () => {
+  // A .docx becomes html because no browser renders one; markdown stays
+  // markdown; a PDF is handed to the browser's own viewer.
+  assert.equal(storedNoteFormat('docx'), 'html');
+  assert.equal(storedNoteFormat('md'), 'md');
+  assert.equal(storedNoteFormat('markdown'), 'md');
+  assert.equal(storedNoteFormat('pdf'), 'pdf');
+  assert.equal(storedNoteFormat('exe'), null);
 });
 
 // ------------------------------------------------------------- uploading --
@@ -287,8 +400,25 @@ test('a stored version 1 catalog is migrated on read', async () => {
 
   const catalog = await readCatalog(config, { fetchImpl });
 
-  assert.equal(catalog.version, 2);
+  assert.equal(catalog.version, 3);
   assert.equal(catalog.collections[0].id, 'cinema');
+  assert.deepEqual(catalog.notes, []);
+});
+
+test('a version 2 catalog gains notes rather than being rejected', async () => {
+  // Notes were added as a sibling array precisely so that every catalog
+  // already written stays valid: the upgrade is a default, not a rewrite.
+  const stored = catalogWith();
+  delete stored.notes;
+  stored.version = 2;
+
+  const { fetchImpl } = fakeS3({ current: stored });
+  const catalog = await readCatalog(config, { fetchImpl });
+
+  assert.equal(catalog.version, 3);
+  assert.deepEqual(catalog.notes, []);
+  assert.equal(catalog.titles.length, 1, 'the videos must survive the upgrade');
+  assert.deepEqual(validateCatalog(catalog), []);
 });
 
 test('a write bumps the revision and stamps the time', async () => {

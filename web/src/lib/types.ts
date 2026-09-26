@@ -37,6 +37,25 @@ export interface Title {
   featured?: boolean;
 }
 
+/**
+ * A note lives in the same tree as the videos. It is a separate list rather
+ * than a kind of title because almost nothing they carry is the same: a note
+ * has no duration, no poster and no playback position.
+ */
+export interface Note {
+  id: string;
+  title: string;
+  collectionId: string;
+  /** What is stored, which is not always what was uploaded: .docx becomes html. */
+  format: 'md' | 'html' | 'pdf';
+  source: string;
+  /** The uploaded file, when it differs from what is rendered. For download. */
+  original?: string;
+  originalName?: string;
+  sizeBytes?: number;
+  updatedAt?: string;
+}
+
 export interface Catalog {
   version: number;
   /** Bumped on every save, and what makes a concurrent edit detectable. */
@@ -44,6 +63,7 @@ export interface Catalog {
   updatedAt: string;
   collections: Collection[];
   titles: Title[];
+  notes: Note[];
 }
 
 export interface SessionUser {

@@ -68,6 +68,14 @@ const MIME_TYPES = {
   '.jpeg': 'image/jpeg',
   '.png': 'image/png',
   '.webp': 'image/webp',
+  // Notes. In a deployment these are served by S3 with the type set on the
+  // presigned upload; locally the file's extension is all there is to go on.
+  '.md': 'text/markdown; charset=utf-8',
+  '.markdown': 'text/markdown; charset=utf-8',
+  '.txt': 'text/markdown; charset=utf-8',
+  '.pdf': 'application/pdf',
+  '.html': 'text/html; charset=utf-8',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
 
 async function readRequestBody(request) {

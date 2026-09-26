@@ -3,6 +3,7 @@ import { Spinner } from '../components/Spinner';
 import { TitleCard } from '../components/TitleCard';
 import { TitleRow } from '../components/TitleRow';
 import { CourseView } from '../components/CourseView';
+import { NoteList } from '../components/NoteList';
 import { useCatalog } from '../lib/CatalogProvider';
 import { isCourse } from '../lib/course';
 
@@ -13,7 +14,8 @@ import { isCourse } from '../lib/course';
  */
 export function CollectionPage() {
   const { collectionId = '' } = useParams();
-  const { loading, collectionById, childrenOf, titlesDirectlyIn, titlesBeneath, pathTo } = useCatalog();
+  const { loading, collectionById, childrenOf, titlesDirectlyIn, titlesBeneath, pathTo, notesIn } =
+    useCatalog();
 
   if (loading) {
     return (
@@ -42,8 +44,12 @@ export function CollectionPage() {
   // A collection holding videos rather than more collections is a course, and
   // a course is an ordered thing with a position in it. A grid of tiles cannot
   // say which lesson is next, so it gets a syllabus instead.
+  const notes = notesIn(collection.id);
+
+  // A collection holding videos rather than more collections is a course; its
+  // notes belong with its lessons rather than in a section of their own.
   if (isCourse(children, ownTitles)) {
-    return <CourseView collection={collection} titles={ownTitles} trail={trail} />;
+    return <CourseView collection={collection} titles={ownTitles} notes={notes} trail={trail} />;
   }
 
   return (
@@ -80,7 +86,9 @@ export function CollectionPage() {
         </div>
       )}
 
-      {children.length === 0 && ownTitles.length === 0 && (
+      <NoteList notes={notes} />
+
+      {children.length === 0 && ownTitles.length === 0 && notes.length === 0 && (
         <p className="row__empty">Nothing here yet.</p>
       )}
     </main>

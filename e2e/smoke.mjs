@@ -541,6 +541,67 @@ try {
     }
   });
 
+  // ----------------------------------------------------------- notes ----
+
+  await step('a note sits in the tree beside the videos it belongs to', async () => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${BASE}/c/sweeglu-elliott-wave-course`, { waitUntil: 'networkidle' });
+    await page.waitForSelector('.note-row');
+
+    // The course lists it alongside its lessons rather than on a page of its
+    // own: a note is part of the course, not a separate library.
+    assert.match(await page.textContent('.note-row__name'), /Elliott Wave, on one page/);
+    assert.match(await page.textContent('.note-row__meta'), /Markdown/);
+    assert.match(await page.textContent('.course__facts'), /1 note/);
+  });
+
+  await step('markdown is rendered, not printed', async () => {
+    await page.click('.note-row');
+    await page.waitForSelector('.prose', { timeout: 15_000 });
+
+    const shape = await page.evaluate(() => ({
+      headings: [...document.querySelectorAll('.prose h2')].map((el) => el.textContent),
+      tableRows: document.querySelectorAll('.prose table tr').length,
+      code: document.querySelectorAll('.prose pre code').length,
+      quote: document.querySelectorAll('.prose blockquote').length,
+      // The source must not be showing through as literal syntax.
+      raw: document.querySelector('.prose').textContent.includes('## The rules'),
+    }));
+
+    assert.deepEqual(shape.headings, [
+      'The rules', 'The guidelines', 'Common retracements', 'Working a count',
+    ]);
+    assert.ok(shape.tableRows >= 4, `expected a table, got ${shape.tableRows} rows`);
+    assert.equal(shape.code, 1);
+    assert.equal(shape.quote, 1);
+    assert.equal(shape.raw, false, 'markdown syntax should not be visible');
+
+    // The note names itself and so does the page; only one of them should say
+    // it out loud.
+    assert.equal(await page.locator('.prose h1').count(), 0);
+    assert.equal(await page.locator('.note__title').count(), 1);
+
+    if (shotsDir) await page.screenshot({ path: `${shotsDir}/08-note.png`, fullPage: true });
+  });
+
+  await step('a note is findable by its own name and by its course', async () => {
+    // Its name and its course, the same two things a video is findable by.
+    // The text inside a note is deliberately not indexed: that would mean
+    // fetching every note on every keystroke, and wants a real index.
+    for (const [query, why] of [
+      ['elliott one page', 'words in its own name'],
+      ['sweeglu', 'the course it belongs to'],
+    ]) {
+      await page.goto(`${BASE}/search?q=${encodeURIComponent(query)}`, { waitUntil: 'networkidle' });
+      await page.waitForTimeout(250);
+      const names = await page.$$eval('.note-row__name', (els) => els.map((el) => el.textContent));
+      assert.ok(
+        names.some((name) => name.includes('Elliott Wave, on one page')),
+        `a note should be findable by ${why}; got ${JSON.stringify(names)}`,
+      );
+    }
+  });
+
   // ------------------------------------------------- course and theatre --
 
   await step('a course reads as a syllabus, numbered and in order', async () => {

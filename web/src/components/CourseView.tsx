@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom';
 import { GeneratedArt } from './GeneratedArt';
 import { formatDuration } from '../lib/format';
 import { courseStats, formatRuntime } from '../lib/course';
-import type { Collection, Title } from '../lib/types';
+import { NoteList } from './NoteList';
+import type { Collection, Note, Title } from '../lib/types';
 
 /**
  * A course, presented as a syllabus rather than a pile of tiles.
@@ -20,10 +21,12 @@ const TICK = 'M5 12.5 10 17.5 19 7';
 export function CourseView({
   collection,
   titles,
+  notes,
   trail,
 }: {
   collection: Collection;
   titles: Title[];
+  notes: Note[];
   trail: Collection[];
 }) {
   const stats = courseStats(titles);
@@ -63,6 +66,7 @@ export function CourseView({
             {[
               `${stats.total} ${stats.total === 1 ? 'lesson' : 'lessons'}`,
               formatRuntime(stats.runtimeSec),
+              notes.length > 0 ? `${notes.length} ${notes.length === 1 ? 'note' : 'notes'}` : '',
             ]
               .filter(Boolean)
               .join('   ·   ')}
@@ -142,6 +146,10 @@ export function CourseView({
           </li>
         ))}
       </ol>
+
+      {/* After the syllabus: the lessons are the course, and the notes are
+          what you reach for alongside them. */}
+      <NoteList notes={notes} heading="Course notes" />
     </main>
   );
 }

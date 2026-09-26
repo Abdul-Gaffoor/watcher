@@ -9,6 +9,7 @@ import { CollectionPage } from './pages/CollectionPage';
 import { DevicePairPage } from './pages/DevicePairPage';
 import { LinkDevicePage } from './pages/LinkDevicePage';
 import { LoginPage } from './pages/LoginPage';
+import { NotePage } from './pages/NotePage';
 import { SearchPage } from './pages/SearchPage';
 import { WatchPage } from './pages/WatchPage';
 
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="admin" element={<AdminPage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="watch/:titleId" element={<WatchPage />} />
+            <Route path="notes/:noteId" element={<NotePage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

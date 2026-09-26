@@ -215,6 +215,31 @@ viewer reads: the id underneath is the storage prefix the video and its poster
 already live under, so a name typed wrong at upload is corrected without moving
 a byte.
 
+**Notes** live in the same tree as the videos, so a course can hold its lessons
+and its written material together. Upload Markdown, a PDF, or a Word document
+in the dashboard's **Notes** panel and file it into any collection; rename,
+refile and remove work exactly as they do for videos.
+
+What happens to each format:
+
+| Uploaded | Stored as | Read as |
+| --- | --- | --- |
+| `.md`, `.markdown`, `.txt` | the file, unchanged | rendered in the app |
+| `.pdf` | the file, unchanged | the browser's own PDF viewer |
+| `.docx` | HTML, converted in your browser at upload | rendered in the app |
+
+A Word document is converted because no browser renders one. It happens once,
+in the admin's browser, rather than shipping a two-megabyte converter to every
+reader — and the original is kept beside it, so the **Download original** link
+gives back the file you uploaded. Markdown is stored exactly as written and
+rendered on the way to the screen, so the stored file stays editable rather
+than having a rendering decision baked into it.
+
+Notes are searchable by their own name and by the course they belong to, the
+same two things a video is findable by. The text *inside* a note is not
+indexed: that would mean fetching every note on every keystroke, and wants a
+real index rather than a loop.
+
 **Lesson order** is the order the videos sit in, since a course is read top to
 bottom and nothing else in the catalog expresses sequence. The dashboard groups
 videos under their collection and numbers them, so the numbers there are the

@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { fetchCatalog } from './api';
 import { searchCatalog, type SearchResults } from './search';
-import type { Catalog, Collection, Title } from './types';
+import type { Catalog, Collection, Note, Title } from './types';
 
 interface CatalogContextValue {
   catalog: Catalog | null;
@@ -17,6 +17,9 @@ interface CatalogContextValue {
   error: string | null;
   reload: () => void;
   byId: (id: string) => Title | undefined;
+  noteById: (id: string) => Note | undefined;
+  /** Notes filed directly in this collection, in catalog order. */
+  notesIn: (collectionId: string) => Note[];
   collectionById: (id: string) => Collection | undefined;
   /** Top-level shelves, in declared order. These are the nav. */
   roots: Collection[];
@@ -64,6 +67,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CatalogContextValue>(() => {
     const titles = catalog?.titles ?? [];
     const collections = catalog?.collections ?? [];
+    const notes = catalog?.notes ?? [];
     const titleIndex = new Map(titles.map((title) => [title.id, title]));
     const collectionIndex = new Map(collections.map((collection) => [collection.id, collection]));
 
@@ -126,9 +130,11 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       roots: childrenOf(null),
       childrenOf,
       titlesDirectlyIn: (collectionId) => titlesByCollection.get(collectionId) ?? [],
+      noteById: (id) => notes.find((note) => note.id === id),
+      notesIn: (collectionId) => notes.filter((note) => note.collectionId === collectionId),
       titlesBeneath,
       pathTo,
-      search: (query) => searchCatalog(query, titles, collections, pathTo),
+      search: (query) => searchCatalog(query, titles, collections, notes, pathTo),
       featured: titles.find((title) => title.featured) ?? titles[0] ?? null,
     };
   }, [catalog, loading, error, reload]);

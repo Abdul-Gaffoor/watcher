@@ -1,4 +1,4 @@
-import type { Collection, Title } from './types';
+import type { Collection, Note, Title } from './types';
 
 /**
  * Finding things in a library whose names repeat.
@@ -18,6 +18,7 @@ import type { Collection, Title } from './types';
 export interface SearchResults {
   collections: Collection[];
   titles: Title[];
+  notes: Note[];
 }
 
 /**
@@ -65,10 +66,11 @@ export function searchCatalog(
   query: string,
   titles: Title[],
   collections: Collection[],
+  notes: Note[],
   pathTo: (collectionId: string) => Collection[],
 ): SearchResults {
   const needles = terms(query);
-  if (needles.length === 0) return { collections: [], titles: [] };
+  if (needles.length === 0) return { collections: [], titles: [], notes: [] };
 
   // Computed once per search rather than per title: a title's ancestry is the
   // same for every one of its siblings.
@@ -106,8 +108,20 @@ export function searchCatalog(
     .filter((hit) => hit.score >= 0)
     .sort((a, b) => b.score - a.score);
 
+  // Notes are findable by name and by the course they belong to, exactly as
+  // videos are. A library where only half the shelf is searchable is worse
+  // than one where none of it is, because the gap is invisible.
+  const rankedNotes = notes
+    .map((note) => ({
+      note,
+      score: scoreOf(normalise(note.title), pathText.get(note.collectionId) ?? '', '', needles),
+    }))
+    .filter((hit) => hit.score >= 0)
+    .sort((a, b) => b.score - a.score);
+
   return {
     collections: rankedCollections.map((hit) => hit.collection),
     titles: rankedTitles.map((hit) => hit.title),
+    notes: rankedNotes.map((hit) => hit.note),
   };
 }

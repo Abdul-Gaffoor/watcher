@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "revision": 1,
   "updatedAt": "2026-09-25T00:00:00Z",
   "collections": [
@@ -244,6 +244,17 @@
         "hls": "/media/titles/signal-and-noise/hls/master.m3u8"
       },
       "collectionId": "english"
+    }
+  ],
+  "notes": [
+    {
+      "id": "elliott-wave-cheatsheet",
+      "title": "Elliott Wave, on one page",
+      "collectionId": "sweeglu-elliott-wave-course",
+      "format": "md",
+      "source": "/media/notes/elliott-wave-cheatsheet/source.md",
+      "sizeBytes": 1480,
+      "updatedAt": "2026-09-26T00:00:00.000Z"
     }
   ]
 }

@@ -151,6 +151,8 @@ export const adminApi = {
       key: string;
       mediaPath: string;
       url: string;
+      /** Set for the single-PUT operations: a poster, a note. */
+      contentType: string;
       urls: { partNumber: number; url: string }[];
     }>('/api/admin/uploads', {
       method: 'POST',

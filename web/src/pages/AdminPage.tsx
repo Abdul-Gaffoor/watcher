@@ -12,7 +12,8 @@ import { useAuth } from '../auth/AuthProvider';
 import { adminApi } from '../lib/api';
 import { capturePoster } from '../lib/poster';
 import { backfillPoster, uploadPoster, uploadVideo } from '../lib/uploads';
-import type { Catalog, Collection, Title } from '../lib/types';
+import { NOTE_ACCEPT, formatBytes, prepareNote, uploadNote } from '../lib/notes';
+import type { Catalog, Collection, Note, Title } from '../lib/types';
 
 /**
  * The library manager.
@@ -106,6 +107,11 @@ export function AdminPage() {
   const [progress, setProgress] = useState<number | null>(null);
   const [backfill, setBackfill] = useState<{ done: number; total: number } | null>(null);
 
+  const [noteFile, setNoteFile] = useState<File | null>(null);
+  const [noteTitle, setNoteTitle] = useState('');
+  const [noteCollection, setNoteCollection] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -147,10 +153,22 @@ export function AdminPage() {
       .filter((group) => group.titles.length > 0);
   }, [catalog, rows]);
 
+  /** Notes grouped under their collection, the way the videos are. */
+  const noteGroups = useMemo(() => {
+    if (!catalog) return [];
+    return rows
+      .map(({ collection }) => ({
+        collection,
+        notes: (catalog.notes ?? []).filter((note) => note.collectionId === collection.id),
+      }))
+      .filter((group) => group.notes.length > 0);
+  }, [catalog, rows]);
+
   const blank = useMemo(() => {
     const collections = (catalog?.collections ?? []).filter((c) => c.name.trim() === '').length;
     const titles = (catalog?.titles ?? []).filter((t) => t.title.trim() === '').length;
-    return collections + titles;
+    const notes = (catalog?.notes ?? []).filter((n) => n.title.trim() === '').length;
+    return collections + titles + notes;
   }, [catalog]);
   const titleCount = useCallback(
     (collectionId: string) =>
@@ -385,6 +403,60 @@ export function AdminPage() {
         : `Artwork made for ${found.size} of ${needArtwork.length}. The rest could not be decoded here.`,
     );
   };
+
+  /**
+   * Upload, then record -- the same order as a video, and for the same reason:
+   * the catalog is only written once the file is in the bucket, so a failed
+   * upload cannot leave a note pointing at nothing.
+   */
+  const addNote = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!noteFile || !noteTitle.trim() || !noteCollection) return;
+
+    const name = noteTitle.trim();
+    let id = slugify(name);
+    const taken = new Set((catalog.notes ?? []).map((note) => note.id));
+    if (!id) {
+      setError('That name has no letters or digits to make an id from.');
+      return;
+    }
+    if (taken.has(id)) {
+      let suffix = 2;
+      while (taken.has(`${id}-${suffix}`)) suffix += 1;
+      id = `${id}-${suffix}`;
+    }
+
+    setError(null);
+    setNotice(null);
+    setNoteBusy(true);
+    try {
+      const prepared = await prepareNote(noteFile);
+      if (prepared.extension === 'html') setNotice('Converting the Word document…');
+
+      const stored = await uploadNote(id, noteFile, prepared);
+      const note: Note = { id, title: name, collectionId: noteCollection, ...stored };
+
+      await save({ notes: [...(catalog.notes ?? []), note] });
+      setNoteFile(null);
+      setNoteTitle('');
+      setNotice(`Added “${name}”.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'The note could not be added');
+    } finally {
+      setNoteBusy(false);
+    }
+  };
+
+  const renameNote = (id: string, title: string) =>
+    mutate({ notes: (catalog.notes ?? []).map((note) => (note.id === id ? { ...note, title } : note)) });
+
+  const moveNote = (id: string, collectionId: string) =>
+    mutate({
+      notes: (catalog.notes ?? []).map((note) => (note.id === id ? { ...note, collectionId } : note)),
+    });
+
+  const removeNote = (id: string) =>
+    mutate({ notes: (catalog.notes ?? []).filter((note) => note.id !== id) });
 
   /** Refiles a video. Also just one field: the video itself does not move. */
   const moveTitle = (id: string, collectionId: string) =>
@@ -699,6 +771,109 @@ export function AdminPage() {
                   </li>
                 ))}
               </ol>
+            </section>
+          ))
+        )}
+      </section>
+
+      <section className="admin__panel">
+        <h2>Notes</h2>
+        <p className="page__subtitle admin__hint">
+          Markdown, PDF or Word. A Word document is converted so it can be read in the app; the
+          original stays downloadable.
+        </p>
+
+        <form className="admin__form" onSubmit={addNote}>
+          <label className="field">
+            <span className="field__label">File</span>
+            <input
+              type="file"
+              accept={NOTE_ACCEPT}
+              required
+              onChange={(event) => setNoteFile(event.target.files?.[0] ?? null)}
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">Title</span>
+            <input
+              type="text"
+              required
+              value={noteTitle}
+              onChange={(event) => setNoteTitle(event.target.value)}
+            />
+          </label>
+
+          <label className="field">
+            <span className="field__label">Goes in</span>
+            <select
+              required
+              value={noteCollection}
+              onChange={(event) => setNoteCollection(event.target.value)}
+            >
+              <option value="">Choose a collection…</option>
+              {rows.map(({ collection, depth }) => (
+                <option key={collection.id} value={collection.id}>
+                  {'\u00a0\u00a0'.repeat(depth)}
+                  {collection.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <button className="button button--primary" type="submit" disabled={noteBusy || saving}>
+            {noteBusy ? 'Adding…' : 'Add note'}
+          </button>
+        </form>
+
+        {noteGroups.length === 0 ? (
+          <p className="row__empty">No notes yet.</p>
+        ) : (
+          noteGroups.map(({ collection, notes }) => (
+            <section className="admin__group" key={collection.id}>
+              <header className="admin__group-head">
+                <h3>{collection.name}</h3>
+                <span className="admin__count">
+                  {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+                </span>
+              </header>
+
+              <ul className="admin__titles">
+                {notes.map((note) => (
+                  <li key={note.id}>
+                    <span className="admin__lesson" aria-hidden="true">
+                      {note.format === 'pdf' ? 'PDF' : note.originalName ? 'DOC' : 'MD'}
+                    </span>
+
+                    <input
+                      className="admin__rename"
+                      aria-label={`Rename ${note.title}`}
+                      value={note.title}
+                      onChange={(event) => renameNote(note.id, event.target.value)}
+                    />
+
+                    <span className="admin__count">{formatBytes(note.sizeBytes)}</span>
+
+                    <select
+                      className="admin__move"
+                      aria-label={`Move ${note.title} into`}
+                      value={note.collectionId}
+                      onChange={(event) => moveNote(note.id, event.target.value)}
+                    >
+                      {rows.map(({ collection: option, depth }) => (
+                        <option key={option.id} value={option.id}>
+                          {'\u00a0\u00a0'.repeat(depth)}
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button className="admin__remove" type="button" onClick={() => removeNote(note.id)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </section>
           ))
         )}

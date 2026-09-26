@@ -53,6 +53,40 @@ segment is a Lambda invocation plus an S3 read in one region, for every viewer,
 every time. It is a way to be live, not a way to serve video well, and
 `edge = "cloudfront"` is a one-line change back once the account is verified.
 
+## Notes
+
+Notes share the collection tree with videos, as a sibling array rather than a
+kind of title — almost nothing they carry is the same, since a note has no
+duration, no poster and no playback position.
+
+```
+catalog.json (version 3)
+  collections[]   the tree, unchanged
+  titles[]        videos
+  notes[]         { id, title, collectionId, format, source, original? }
+```
+
+Adding them bumped the catalog to version 3, and the upgrade from 2 is a
+default rather than a rewrite: an empty `notes` array. That is the reason for
+a sibling array over a `kind` field on titles — every catalog already written
+stays valid.
+
+Files live under `media/notes/<id>/`, one folder per note, so a note and
+anything converted from it are deleted together. The key is derived from the
+note id and re-derived on the server for every upload, exactly as a video's
+is; `isOwnedMediaKey` guards both prefixes.
+
+`.docx` is converted to HTML in the admin's browser before it is stored,
+because no browser renders one. It is sanitised then *and* again when it is
+rendered — the store is not a trust boundary, and storing something we would
+refuse to display is how a latent problem is made. Markdown is parsed at read
+time so the stored file stays the thing that was written.
+
+Content type matters more here than for video: a PDF served as
+`application/octet-stream` downloads instead of opening, and markdown served
+as `text/html` would execute. It is set on the presigned PUT, so S3 serves
+each note with the type it was stored under.
+
 ## Pairing a device
 
 RFC 8628 (the OAuth device grant) in miniature, for screens where typing a

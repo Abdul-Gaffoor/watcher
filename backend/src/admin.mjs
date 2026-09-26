@@ -2,7 +2,8 @@ import {
   CATALOG_VERSION,
   ID_PATTERN,
   isOwnedMediaKey,
-  migrateFromV1,
+  migrateCatalog,
+  noteKeyFor,
   posterKeyFor,
   sourceKeyFor,
   validateCatalog,
@@ -26,6 +27,30 @@ const CATALOG_KEY = 'media/catalog.json';
 const UPLOAD_URL_TTL = 60 * 60;
 const CATALOG_URL_TTL = 60;
 const MAX_PARTS_PER_REQUEST = 100;
+
+/**
+ * What a note may be stored as, and the type S3 must serve it with. The type
+ * matters more here than for video: a PDF served as octet-stream downloads
+ * instead of opening, and markdown served as HTML would run in the browser.
+ */
+const NOTE_TYPES = new Map([
+  ['md', 'text/markdown; charset=utf-8'],
+  ['markdown', 'text/markdown; charset=utf-8'],
+  ['txt', 'text/markdown; charset=utf-8'],
+  ['pdf', 'application/pdf'],
+  // Converted from .docx in the browser before upload; no browser renders one.
+  ['html', 'text/html; charset=utf-8'],
+  // The original, kept beside the conversion so it can be downloaded.
+  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+]);
+
+/** The extension a note is stored under, given what was uploaded. */
+export function storedNoteFormat(extension) {
+  if (extension === 'pdf') return 'pdf';
+  if (extension === 'docx') return 'html';
+  if (NOTE_TYPES.has(extension)) return 'md';
+  return null;
+}
 
 /** Extensions we are willing to store and later serve as a video source. */
 const ALLOWED_EXTENSIONS = new Map([
@@ -78,9 +103,9 @@ export async function readCatalog(config, { fetchImpl = fetch, fs = null } = {})
     const nodeFs = fs ?? (await import('node:fs/promises'));
     try {
       const parsed = JSON.parse(await nodeFs.readFile(local, 'utf8'));
-      return parsed.version === CATALOG_VERSION ? parsed : migrateFromV1(parsed);
+      return migrateCatalog(parsed);
     } catch {
-      return { version: CATALOG_VERSION, revision: 0, collections: [], titles: [] };
+      return { version: CATALOG_VERSION, revision: 0, collections: [], titles: [], notes: [] };
     }
   }
 
@@ -97,12 +122,11 @@ export async function readCatalog(config, { fetchImpl = fetch, fs = null } = {})
   const response = await fetchImpl(url);
   if (response.status === 404) {
     // An empty library is a legitimate starting state, not an error.
-    return { version: CATALOG_VERSION, revision: 0, collections: [], titles: [] };
+    return { version: CATALOG_VERSION, revision: 0, collections: [], titles: [], notes: [] };
   }
   if (!response.ok) throw new AdminError('Could not read the catalog.', 502);
 
-  const parsed = JSON.parse(await response.text());
-  return parsed.version === CATALOG_VERSION ? parsed : migrateFromV1(parsed);
+  return migrateCatalog(JSON.parse(await response.text()));
 }
 
 /**
@@ -204,6 +228,38 @@ export function signUpload(config, body) {
         region,
         credentials,
         extraQuery: { uploads: '' },
+        expiresIn: UPLOAD_URL_TTL,
+      }),
+    };
+  }
+
+  if (op === 'note') {
+    // One PUT. A note is a document, not a lesson: multipart exists for files
+    // measured in gigabytes and would be pure ceremony here.
+    const noteId = String(body.noteId ?? '');
+    if (!ID_PATTERN.test(noteId)) {
+      throw new AdminError('That note id must be lowercase letters, digits and hyphens.');
+    }
+
+    const extension = String(body.extension ?? '').toLowerCase();
+    const contentType = NOTE_TYPES.get(extension);
+    if (!contentType) {
+      throw new AdminError(
+        `That file type is not supported. Use one of: ${[...NOTE_TYPES.keys()].join(', ')}.`,
+      );
+    }
+
+    const key = noteKeyFor(noteId, extension);
+    return {
+      key,
+      contentType,
+      mediaPath: `/${key}`,
+      url: presignS3({
+        method: 'PUT',
+        bucket,
+        key,
+        region,
+        credentials,
         expiresIn: UPLOAD_URL_TTL,
       }),
     };

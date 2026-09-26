@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { GeneratedArt } from '../components/GeneratedArt';
+import { NoteList } from '../components/NoteList';
 import { TitleCard } from '../components/TitleCard';
 import { useCatalog } from '../lib/CatalogProvider';
 import { formatRuntime } from '../lib/course';
@@ -11,9 +12,11 @@ export function SearchPage() {
   const location = useLocation();
   const query = searchParams.get('q') ?? '';
   const { search, loading, roots, titlesBeneath, pathTo } = useCatalog();
-  const { collections, titles } = loading ? { collections: [], titles: [] } : search(query);
+  const { collections, titles, notes } = loading
+    ? { collections: [], titles: [], notes: [] }
+    : search(query);
 
-  const total = collections.length + titles.length;
+  const total = collections.length + titles.length + notes.length;
 
   /**
    * Every other page carries a breadcrumb; this one has nowhere to say it came
@@ -106,9 +109,15 @@ export function SearchPage() {
         </section>
       )}
 
+      {notes.length > 0 && (
+        <section className="results">
+          <NoteList notes={notes} />
+        </section>
+      )}
+
       {titles.length > 0 && (
         <section className="results">
-          {collections.length > 0 && <h2 className="eyebrow">Videos</h2>}
+          {(collections.length > 0 || notes.length > 0) && <h2 className="eyebrow">Videos</h2>}
           <div className="grid">
             {titles.map((title) => (
               <TitleCard key={title.id} title={title} />
